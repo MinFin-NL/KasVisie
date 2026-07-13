@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KasVisie · Kasprognose-dashboard</title>
+  <link rel="stylesheet" href="/static/vendor/nl-rvo/fonts/index.css" />
+  <link rel="stylesheet" href="/static/vendor/nl-rvo/design-tokens.css" />
+  <link rel="stylesheet" href="/static/vendor/nl-rvo/components.css" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="utrecht-document rvo-theme">
+  <header class="kv-header" data-rvo-on-dark>
+    <div class="rvo-max-width-layout rvo-max-width-layout--lg rvo-max-width-layout-inline-padding--sm">
+      <div class="kv-header__topbar">
+        <div class="rvo-logo kv-header__logo">
+          <img class="rvo-logo__emblem" src="/static/vendor/nl-rvo/images/emblem.svg" alt="" />
+          <div class="rvo-logo__wordmark">
+            <p class="rvo-logo__title">Ministerie van&#10;Financiën</p>
+          </div>
+        </div>
+        <span class="kv-header__app">KasVisie <span class="kv-header__app-sub">· Kasprognose-dashboard</span></span>
+      </div>
+      <nav class="kv-header__tab-bar" aria-label="Hoofdnavigatie">
+        <ul class="kv-tabs">
+          <li><a href="#data" id="tab-data" class="kv-tab" aria-current="false">Gegevens</a></li>
+          <li><a href="#grafiek" id="tab-grafiek" class="kv-tab" aria-current="false">Prognose</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main class="kv-main rvo-max-width-layout rvo-max-width-layout--lg rvo-max-width-layout-inline-padding--sm">
+    <!-- ══════════ Scherm 1: gegevens ══════════ -->
+    <section id="screen-data" hidden>
+      <div class="kv-columns">
+        <div class="kv-card">
+          <h2 class="utrecht-heading-2">Data uploaden</h2>
+          <p class="utrecht-paragraph">
+            Upload een CSV-bestand met een datumkolom (<code>date</code> of <code>datum</code>)
+            en een bedragkolom (<code>cashflow</code>, <code>bedrag</code> of <code>amount</code>).
+          </p>
+          <form id="upload-form" class="kv-upload-form">
+            <input type="file" id="upload-file" accept=".csv,text/csv" required
+                   aria-label="CSV-bestand met kasstromen" />
+            <button type="submit" class="rvo-button rvo-button--primary rvo-button--size-sm">Uploaden</button>
+            <button type="button" id="btn-demo" class="rvo-button rvo-button--secondary rvo-button--size-sm">
+              Demo-data laden
+            </button>
+          </form>
+          <div id="upload-alert" role="status"></div>
+        </div>
+        <div class="kv-card">
+          <h2 class="utrecht-heading-2">Huidige dataset</h2>
+          <dl class="kv-deflist" id="dataset-summary"></dl>
+        </div>
+      </div>
+
+      <div class="kv-card">
+        <h2 class="utrecht-heading-2">Data inspecteren</h2>
+        <div class="kv-table-toolbar">
+          <label class="rvo-label rvo-label--sm" for="table-month">Maand</label>
+          <div class="rvo-select-wrapper">
+            <select id="table-month" class="utrecht-select"></select>
+          </div>
+        </div>
+        <div class="kv-table-scroll">
+          <table class="rvo-table" id="data-table">
+            <thead>
+              <tr class="rvo-table-row">
+                <th scope="col" class="rvo-table-header">Datum</th>
+                <th scope="col" class="rvo-table-header">Dag</th>
+                <th scope="col" class="rvo-table-header rvo-table-header--numeric">Cashflow</th>
+                <th scope="col" class="rvo-table-header">Bijzonderheid</th>
+              </tr>
+            </thead>
+            <tbody id="data-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════ Scherm 2: prognose ══════════ -->
+    <section id="screen-grafiek" hidden>
+      <div id="kpi-row" class="kv-kpi-row"></div>
+      <div id="totals-panel" class="kv-card kv-totals" hidden></div>
+
+      <div class="kv-graph-layout">
+        <div class="kv-card kv-chart-card">
+          <div id="chart-legend" class="kv-legend" aria-hidden="false"></div>
+          <div class="kv-chart-wrap">
+            <svg id="chart" role="img" aria-label="Kasprognose per dag"></svg>
+            <div id="chart-tooltip" class="kv-tooltip" hidden></div>
+          </div>
+          <p class="utrecht-paragraph kv-hint">
+            Sleep een prognosepunt (rood) omhoog of omlaag om een handmatige bijstelling te maken;
+            latere dagen bewegen evenredig mee.
+          </p>
+          <div id="adjust-bar" class="kv-adjust-bar" hidden>
+            <span id="adjust-info"></span>
+            <button type="button" id="btn-reset-adjust" class="rvo-button rvo-button--tertiary rvo-button--size-sm">
+              Bijstellingen wissen
+            </button>
+          </div>
+        </div>
+
+        <aside class="kv-card kv-sidebar" aria-label="Filters en opties">
+          <h2 class="utrecht-heading-3">Filters &amp; opties</h2>
+
+          <div class="kv-form-field">
+            <label class="rvo-label" for="model-select">Model</label>
+            <div class="rvo-select-wrapper">
+              <select id="model-select" class="utrecht-select"></select>
+            </div>
+          </div>
+
+          <fieldset class="kv-fieldset">
+            <legend class="rvo-label">Weergave</legend>
+            <div class="rvo-checkbox__group">
+              <label class="rvo-checkbox rvo-checkbox--not-checked kv-switch">
+                <input type="checkbox" id="toggle-next-month" class="rvo-checkbox__input" checked />
+                Volgende maand tonen
+              </label>
+              <label class="rvo-checkbox rvo-checkbox--not-checked kv-switch">
+                <input type="checkbox" id="toggle-last-year" class="rvo-checkbox__input" />
+                Realisatie vorig jaar
+              </label>
+              <label class="rvo-checkbox rvo-checkbox--not-checked kv-switch">
+                <input type="checkbox" id="toggle-totals" class="rvo-checkbox__input" />
+                Totale volumes &amp; %-verschil
+              </label>
+            </div>
+          </fieldset>
+
+          <p class="kv-meta" id="graph-meta"></p>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <footer class="kv-footer" role="contentinfo" aria-label="Bèta-melding">
+    <div class="rvo-max-width-layout rvo-max-width-layout--lg rvo-max-width-layout-inline-padding--sm kv-footer__inner">
+      <div class="rvo-alert rvo-alert--warning rvo-alert--padding-sm kv-footer__alert">
+        <div class="rvo-alert__container">
+          <p class="kv-footer__text">
+            Dit is een bètaversie van dit hulpmiddel. Vragen of feedback?
+            <a class="rvo-link" href="mailto:innovatiemanagamentfinancien@minfin.nl">innovatiemanagamentfinancien@minfin.nl</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="/static/chart.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

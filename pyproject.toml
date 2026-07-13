@@ -1,15 +1,22 @@
 [project]
-name = "cashflow-pred"
-version = "0.1.0"
-description = "Add your description here"
+name = "kasvisie"
+version = "0.2.0"
+description = "KasVisie - interactief kasprognose-dashboard"
 readme = "README.md"
 requires-python = ">=3.11,<3.15"
 dependencies = [
-    "jax>=0.4.1",
-    "matplotlib>=3.10.8",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pandas>=2.2",
     "numpy>=1.26.0",
-    "pandas>=3.0.1",
     "scikit-learn>=1.3.0",
-    "statsmodels>=0.14.6",
-    "timesfm[torch] @ git+https://github.com/google-research/timesfm.git",
+    "holidays>=0.50",
+    "python-multipart>=0.0.9",
 ]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]

@@ -1,0 +1,333 @@
+/* KasVisie — laag bovenop NL Design System (RVO-thema: @nl-rvo design-tokens
+   + componentbibliotheek, zoals de invulhulp). Kleuren/spacing uit de tokens. */
+
+/* RVO scopet zijn tokens op .rvo-theme, dus aliassen leven in dezelfde scope. */
+.rvo-theme {
+  /* Projectaliassen — zelfde conventie als de invulhulp */
+  --kv-color-page-bg: var(--rvo-color-grijs-100);
+  --kv-color-border: var(--rvo-color-grijs-200);
+  --kv-color-border-strong: var(--rvo-color-grijs-300);
+  --kv-color-text-muted: var(--rvo-color-grijs-700);
+  --kv-color-text-subtle: var(--rvo-color-grijs-600);
+
+  /* Iconen voor rvo-checkbox en rvo-select; komen normaal uit @nl-rvo/assets/icons. */
+  --rvo-icon-vinkje: url("/static/vendor/nl-rvo/images/vinkje.svg");
+  --rvo-icon-delta-omlaag: url("/static/vendor/nl-rvo/images/delta-omlaag.svg");
+
+  /* Gevalideerd categorisch grafiekpalet (CVD-safe, zie dataviz-checks). */
+  --kv-series-actual: #2f6cb3;
+  --kv-series-pred: #d52b1e;
+  --kv-series-lastyear: #3d8757;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background-color: #f1f5f9; /* fallback vóór het laden van de tokens */
+}
+
+body.rvo-theme {
+  background-color: var(--kv-color-page-bg);
+  min-block-size: 100vh;
+}
+
+code { font-size: 0.9em; }
+
+/* ── Header (donker lintblauw, zoals de invulhulp) ─────────── */
+.kv-header {
+  background-color: var(--rvo-color-lintblauw);
+  color: var(--rvo-color-wit);
+}
+
+.kv-header__topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rvo-space-sm) var(--rvo-space-lg);
+  padding-block: var(--rvo-space-sm);
+}
+
+.kv-header__logo {
+  --rvo-logo-color: var(--rvo-color-wit);
+  --rvo-logo-font-family: inherit;
+  --rvo-logo-font-weight: bold;
+}
+
+.kv-header__app {
+  font-size: var(--rvo-font-size-lg);
+  font-weight: var(--rvo-font-weight-bold);
+  white-space: nowrap;
+}
+
+.kv-header__app-sub {
+  font-size: var(--rvo-font-size-sm);
+  font-weight: var(--rvo-font-weight-semibold);
+  color: rgb(255 255 255 / 0.75);
+}
+
+/* Pill-tabs op de donkere header, zoals de invulhulp-tab-bar */
+.kv-header__tab-bar {
+  border-block-start: 1px solid rgb(255 255 255 / 0.15);
+  padding-block: var(--rvo-space-sm) var(--rvo-space-md);
+}
+
+.kv-tabs {
+  list-style: none;
+  margin: 0;
+  padding: var(--rvo-space-3xs);
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--rvo-space-3xs);
+  background: rgb(255 255 255 / 0.08);
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 999px;
+}
+
+.kv-tabs li { display: inline-flex; }
+
+.kv-tab {
+  display: inline-flex;
+  align-items: center;
+  color: rgb(255 255 255 / 0.82);
+  text-decoration: none;
+  font-size: var(--rvo-font-size-sm);
+  font-weight: var(--rvo-font-weight-semibold);
+  white-space: nowrap;
+  padding: var(--rvo-space-2xs) var(--rvo-space-md);
+  border-radius: 999px;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.kv-tab:hover {
+  background: rgb(255 255 255 / 0.12);
+  color: var(--rvo-color-wit);
+}
+
+.kv-tab:focus-visible {
+  outline: 2px solid var(--rvo-color-wit);
+  outline-offset: 2px;
+}
+
+.kv-tab[aria-current="true"] {
+  background: var(--rvo-color-wit);
+  color: var(--rvo-color-lintblauw);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
+}
+
+/* ── Layout ────────────────────────────────────────────────── */
+.kv-main {
+  padding-block: var(--rvo-space-lg) var(--rvo-space-3xl);
+}
+
+.kv-card {
+  background: var(--rvo-color-wit);
+  border: 1px solid var(--kv-color-border);
+  border-radius: var(--rvo-border-radius-md);
+  padding: var(--rvo-space-lg) var(--rvo-space-xl);
+  margin-block-end: var(--rvo-space-lg);
+  box-shadow: 0 1px 3px rgb(21 66 115 / 0.06);
+}
+
+.kv-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--rvo-space-lg);
+  margin-block-end: var(--rvo-space-lg);
+}
+.kv-columns > .kv-card { margin-block-end: 0; }
+
+.kv-graph-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: var(--rvo-space-lg);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .kv-columns, .kv-graph-layout { grid-template-columns: 1fr; }
+}
+
+/* ── Datascherm ────────────────────────────────────────────── */
+.kv-upload-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--rvo-space-sm);
+  align-items: center;
+}
+
+.kv-deflist {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--rvo-space-2xs) var(--rvo-space-lg);
+  margin: 0;
+  font-size: var(--rvo-font-size-sm);
+}
+.kv-deflist dt { font-weight: var(--rvo-font-weight-semibold); }
+.kv-deflist dd { margin: 0; }
+
+#upload-alert .rvo-alert { margin-block-start: var(--rvo-space-md); }
+
+.kv-table-toolbar {
+  display: flex;
+  gap: var(--rvo-space-sm);
+  align-items: center;
+  margin-block-end: var(--rvo-space-md);
+}
+.kv-table-toolbar .rvo-select-wrapper { inline-size: auto; }
+
+.kv-table-scroll { overflow-x: auto; }
+
+.rvo-table { inline-size: 100%; }
+.kv-num, td.kv-num, th.kv-num { text-align: right; font-variant-numeric: tabular-nums; }
+tr.kv-row--closed { background: var(--rvo-color-grijs-100); }
+
+/* ── KPI-tegels ────────────────────────────────────────────── */
+.kv-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--rvo-space-md);
+  margin-block-end: var(--rvo-space-lg);
+}
+
+.kv-kpi {
+  background: var(--rvo-color-wit);
+  border: 1px solid var(--kv-color-border);
+  border-block-start: 4px solid var(--rvo-color-lintblauw);
+  border-radius: var(--rvo-border-radius-md);
+  padding: var(--rvo-space-md) var(--rvo-space-lg);
+  box-shadow: 0 1px 3px rgb(21 66 115 / 0.06);
+}
+.kv-kpi--metric { border-block-start-color: var(--rvo-color-groen); }
+.kv-kpi__label {
+  font-size: var(--rvo-font-size-sm);
+  color: var(--kv-color-text-subtle);
+  margin: 0 0 var(--rvo-space-2xs);
+}
+.kv-kpi__value {
+  font-size: var(--rvo-font-size-2xl);
+  font-weight: var(--rvo-font-weight-bold);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.kv-kpi__delta { font-size: var(--rvo-font-size-sm); margin: var(--rvo-space-3xs) 0 0; }
+.kv-kpi__delta--up { color: var(--rvo-color-groen); }
+.kv-kpi__delta--down { color: var(--rvo-color-rood); }
+
+/* ── Totalenpaneel ─────────────────────────────────────────── */
+.kv-totals table { border-collapse: collapse; inline-size: 100%; }
+.kv-totals th, .kv-totals td {
+  padding: var(--rvo-space-2xs) var(--rvo-space-sm);
+  border-block-end: 1px solid var(--kv-color-border);
+  text-align: left;
+}
+.kv-totals td:not(:first-child), .kv-totals th:not(:first-child) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Grafiek ───────────────────────────────────────────────── */
+.kv-chart-card { position: relative; }
+.kv-chart-wrap { position: relative; }
+#chart { display: block; inline-size: 100%; block-size: auto; }
+
+.kv-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--rvo-space-2xs) var(--rvo-space-lg);
+  font-size: var(--rvo-font-size-sm);
+  margin-block-end: var(--rvo-space-xs);
+  color: var(--kv-color-text-subtle);
+}
+.kv-legend .swatch {
+  display: inline-block;
+  inline-size: 1.4em;
+  block-size: 0;
+  border-block-start: 3px solid;
+  vertical-align: middle;
+  margin-inline-end: 0.4em;
+}
+.kv-legend .swatch--dashed { border-block-start-style: dashed; }
+.kv-legend .swatch--dotted { border-block-start-style: dotted; }
+.kv-legend .swatch--band {
+  block-size: 0.9em;
+  border: none;
+  background: color-mix(in srgb, var(--kv-series-pred) 18%, transparent);
+}
+.kv-legend .swatch--shade {
+  block-size: 0.9em;
+  border: none;
+  background: var(--rvo-color-grijs-200);
+}
+
+.kv-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--rvo-color-zwart);
+  color: var(--rvo-color-wit);
+  font-size: var(--rvo-font-size-xs);
+  line-height: var(--rvo-line-height-md);
+  padding: var(--rvo-space-2xs) var(--rvo-space-xs);
+  border-radius: var(--rvo-border-radius-sm);
+  max-inline-size: 240px;
+  z-index: 5;
+}
+
+.kv-hint {
+  font-size: var(--rvo-font-size-sm);
+  color: var(--kv-color-text-subtle);
+  margin-block: var(--rvo-space-sm) 0;
+}
+
+.kv-adjust-bar[hidden] { display: none; }
+.kv-adjust-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rvo-space-md);
+  margin-block-start: var(--rvo-space-sm);
+  padding: var(--rvo-space-xs) var(--rvo-space-sm);
+  border-radius: var(--rvo-border-radius-sm);
+  background: var(--rvo-color-donkergeel-150);
+  border: 1px solid var(--rvo-color-donkergeel);
+  font-size: var(--rvo-font-size-sm);
+}
+
+/* ── Zijbalk ───────────────────────────────────────────────── */
+.kv-form-field { margin-block-end: var(--rvo-space-md); }
+.kv-form-field .rvo-label { display: block; margin-block-end: var(--rvo-space-2xs); }
+.kv-sidebar .rvo-select-wrapper, .kv-sidebar .utrecht-select { inline-size: 100%; }
+
+.kv-fieldset { border: none; margin: 0 0 var(--rvo-space-md); padding: 0; }
+.kv-fieldset legend { padding: 0; margin-block-end: var(--rvo-space-xs); }
+
+.kv-switch { padding-block: var(--rvo-space-3xs); }
+
+.kv-meta {
+  font-size: var(--rvo-font-size-xs);
+  color: var(--kv-color-text-subtle);
+  margin-block: var(--rvo-space-lg) 0;
+}
+
+/* ── Bèta-disclaimer onderaan (zoals de invulhulp) ─────────── */
+.kv-footer {
+  position: fixed;
+  inset-block-end: 0;
+  inset-inline: 0;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.kv-footer__inner {
+  pointer-events: auto;
+  padding-block: 3px;
+  padding-inline: var(--rvo-space-md);
+}
+
+.kv-footer__alert { text-align: center; }
+.kv-footer__text { margin: 0; font-size: var(--rvo-font-size-sm); }
+
+/* Ruimte zodat de vaste banner de inhoud niet afdekt */
+.kv-main { padding-block-end: calc(var(--rvo-space-3xl) + 3rem); }
