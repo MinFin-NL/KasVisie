@@ -1,0 +1,165 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  name: alz-p-mgmt-we-ccoe-pool
+
+variables:
+  - group: kasvisie_secrets
+  # Provides ALLOWED_IP_1 and ALLOWED_IP_2 (IPs/CIDRs for the ingress
+  # access-restriction rules), same convention as invulhulp.
+  - name: IMAGE_NAME
+    value: kasvisie
+  - name: RESOURCE_GROUP
+    value: rg-kasvisie-inno-d
+  - name: LOCATION
+    value: westeurope
+  - name: ACR_NAME
+    value: acrkasvisieinnod
+  - name: CONTAINER_APP_ENV
+    value: cae-kasvisie-inno-d
+  - name: CONTAINER_APP
+    value: ca-kasvisie-inno-d
+
+stages:
+  - stage: Build
+    displayName: Build and push image
+    jobs:
+      - job: Build
+        displayName: Docker build and push to ACR
+        steps:
+          - task: AzureCLI@2
+            displayName: Ensure ACR exists
+            env:
+              RESOURCE_GROUP: $(RESOURCE_GROUP)
+              ACR_NAME: $(ACR_NAME)
+              LOCATION: $(LOCATION)
+            inputs:
+              azureSubscription: ccoe-ipf-d-inno-spn-cicd
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                # Idempotent: create returns the existing registry unchanged.
+                az acr create \
+                  --name "$ACR_NAME" \
+                  --resource-group "$RESOURCE_GROUP" \
+                  --location "$LOCATION" \
+                  --sku Basic \
+                  --admin-enabled true \
+                  --output none
+
+          - task: AzureCLI@2
+            displayName: Build and push image
+            env:
+              IMAGE_TAG: $(Build.SourceVersion)
+              IMAGE_NAME: $(IMAGE_NAME)
+              ACR_NAME: $(ACR_NAME)
+            inputs:
+              azureSubscription: ccoe-ipf-d-inno-spn-cicd
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                ACR_LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --query loginServer -o tsv)
+                az acr login --name "$ACR_NAME"
+                docker build \
+                  -t "$ACR_LOGIN_SERVER/$IMAGE_NAME:$IMAGE_TAG" \
+                  -t "$ACR_LOGIN_SERVER/$IMAGE_NAME:latest" .
+                docker push "$ACR_LOGIN_SERVER/$IMAGE_NAME:$IMAGE_TAG"
+                docker push "$ACR_LOGIN_SERVER/$IMAGE_NAME:latest"
+
+  - stage: Deploy
+    displayName: Deploy to Container Apps
+    dependsOn: Build
+    jobs:
+      - job: Deploy
+        displayName: Deploy container app
+        steps:
+          - task: AzureCLI@2
+            displayName: Ensure Container Apps environment exists
+            env:
+              RESOURCE_GROUP: $(RESOURCE_GROUP)
+              LOCATION: $(LOCATION)
+              CONTAINER_APP_ENV: $(CONTAINER_APP_ENV)
+            inputs:
+              azureSubscription: ccoe-ipf-d-inno-spn-cicd
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                if ! az containerapp env show --name "$CONTAINER_APP_ENV" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
+                  az containerapp env create \
+                    --name "$CONTAINER_APP_ENV" \
+                    --resource-group "$RESOURCE_GROUP" \
+                    --location "$LOCATION" \
+                    --output none
+                fi
+
+          - task: AzureCLI@2
+            displayName: Deploy container app
+            env:
+              IMAGE_TAG: $(Build.SourceVersion)
+              IMAGE_NAME: $(IMAGE_NAME)
+              ACR_NAME: $(ACR_NAME)
+              RESOURCE_GROUP: $(RESOURCE_GROUP)
+              CONTAINER_APP_ENV: $(CONTAINER_APP_ENV)
+              CONTAINER_APP: $(CONTAINER_APP)
+            inputs:
+              azureSubscription: ccoe-ipf-d-inno-spn-cicd
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                ACR_LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --query loginServer -o tsv)
+                ACR_USER=$(az acr credential show --name "$ACR_NAME" --query username -o tsv)
+                ACR_PASS=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" -o tsv)
+
+                if az containerapp show --name "$CONTAINER_APP" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
+                  az containerapp update \
+                    --name "$CONTAINER_APP" \
+                    --resource-group "$RESOURCE_GROUP" \
+                    --image "$ACR_LOGIN_SERVER/$IMAGE_NAME:$IMAGE_TAG" \
+                    --min-replicas 1 \
+                    --max-replicas 2
+                else
+                  az containerapp create \
+                    --name "$CONTAINER_APP" \
+                    --resource-group "$RESOURCE_GROUP" \
+                    --environment "$CONTAINER_APP_ENV" \
+                    --image "$ACR_LOGIN_SERVER/$IMAGE_NAME:$IMAGE_TAG" \
+                    --registry-server "$ACR_LOGIN_SERVER" \
+                    --registry-username "$ACR_USER" \
+                    --registry-password "$ACR_PASS" \
+                    --ingress external \
+                    --target-port 8000 \
+                    --cpu 0.5 --memory 1.0Gi \
+                    --min-replicas 1 --max-replicas 2
+                fi
+
+          - task: AzureCLI@2
+            displayName: Apply firewall rules
+            env:
+              CONTAINER_APP: $(CONTAINER_APP)
+              RESOURCE_GROUP: $(RESOURCE_GROUP)
+              ALLOWED_IP_1: $(ALLOWED_IP_1)
+              ALLOWED_IP_2: $(ALLOWED_IP_2)
+            inputs:
+              azureSubscription: ccoe-ipf-d-inno-spn-cicd
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az containerapp ingress access-restriction set \
+                  --name "$CONTAINER_APP" \
+                  --resource-group "$RESOURCE_GROUP" \
+                  --rule-name "allowed-ip-1" \
+                  --ip-address "$ALLOWED_IP_1" \
+                  --action Allow
+                az containerapp ingress access-restriction set \
+                  --name "$CONTAINER_APP" \
+                  --resource-group "$RESOURCE_GROUP" \
+                  --rule-name "allowed-ip-2" \
+                  --ip-address "$ALLOWED_IP_2" \
+                  --action Allow

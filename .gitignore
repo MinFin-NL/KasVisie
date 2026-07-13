@@ -195,5 +195,6 @@ cython_debug/
 .pypirc
 
 
-# Data folder
-data
+# Data folder (echte datasets blijven lokaal, niet in git)
+data/*
+!data/.gitkeep
