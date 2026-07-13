@@ -19,7 +19,13 @@ variables:
   - name: ACR_NAME
     value: acrkasvisieinnod
   - name: CONTAINER_APP_ENV
-    value: cae-kasvisie-inno-d
+    value: cae-invulhulp-inno-d
+  - name: CONTAINER_APP_ENV_RESOURCE_GROUP
+    # cae-invulhulp-inno-d is owned by the invulhulp app and lives in its own
+    # resource group. westeurope has been rejecting new managed environments
+    # (ManagedEnvironmentCapacityHeavyUsageError), so kasvisie deploys into this
+    # existing shared environment instead of creating its own.
+    value: rg-invulhulp-inno-d
   - name: CONTAINER_APP
     value: ca-kasvisie-inno-d
 
@@ -79,24 +85,23 @@ stages:
         displayName: Deploy container app
         steps:
           - task: AzureCLI@2
-            displayName: Ensure Container Apps environment exists
+            displayName: Resolve shared Container Apps environment
             env:
-              RESOURCE_GROUP: $(RESOURCE_GROUP)
-              LOCATION: $(LOCATION)
               CONTAINER_APP_ENV: $(CONTAINER_APP_ENV)
+              CONTAINER_APP_ENV_RESOURCE_GROUP: $(CONTAINER_APP_ENV_RESOURCE_GROUP)
             inputs:
               azureSubscription: ccoe-ipf-d-inno-spn-cicd
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
                 set -euo pipefail
-                if ! az containerapp env show --name "$CONTAINER_APP_ENV" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
-                  az containerapp env create \
-                    --name "$CONTAINER_APP_ENV" \
-                    --resource-group "$RESOURCE_GROUP" \
-                    --location "$LOCATION" \
-                    --output none
-                fi
+                # Only reads the existing environment - it belongs to invulhulp and
+                # is never created/modified from this pipeline.
+                ENV_ID=$(az containerapp env show \
+                  --name "$CONTAINER_APP_ENV" \
+                  --resource-group "$CONTAINER_APP_ENV_RESOURCE_GROUP" \
+                  --query id -o tsv)
+                echo "##vso[task.setvariable variable=CONTAINER_APP_ENV_ID]$ENV_ID"
 
           - task: AzureCLI@2
             displayName: Deploy container app
@@ -105,7 +110,7 @@ stages:
               IMAGE_NAME: $(IMAGE_NAME)
               ACR_NAME: $(ACR_NAME)
               RESOURCE_GROUP: $(RESOURCE_GROUP)
-              CONTAINER_APP_ENV: $(CONTAINER_APP_ENV)
+              CONTAINER_APP_ENV_ID: $(CONTAINER_APP_ENV_ID)
               CONTAINER_APP: $(CONTAINER_APP)
             inputs:
               azureSubscription: ccoe-ipf-d-inno-spn-cicd
@@ -128,7 +133,7 @@ stages:
                   az containerapp create \
                     --name "$CONTAINER_APP" \
                     --resource-group "$RESOURCE_GROUP" \
-                    --environment "$CONTAINER_APP_ENV" \
+                    --environment "$CONTAINER_APP_ENV_ID" \
                     --image "$ACR_LOGIN_SERVER/$IMAGE_NAME:$IMAGE_TAG" \
                     --registry-server "$ACR_LOGIN_SERVER" \
                     --registry-username "$ACR_USER" \
