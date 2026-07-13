@@ -158,6 +158,24 @@ code { font-size: 0.9em; }
   align-items: center;
 }
 
+.kv-file-input {
+  display: flex;
+  align-items: center;
+  gap: var(--rvo-space-sm);
+}
+.kv-file-input__name {
+  font-size: var(--rvo-font-size-sm);
+  color: var(--kv-color-text-muted);
+}
+.kv-visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 .kv-deflist {
   display: grid;
   grid-template-columns: auto 1fr;

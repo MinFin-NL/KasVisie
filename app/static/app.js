@@ -94,6 +94,11 @@
     },
   };
 
+  $("#upload-file").addEventListener("change", () => {
+    const file = $("#upload-file").files[0];
+    $("#upload-file-name").textContent = file ? file.name : "Geen bestand gekozen";
+  });
+
   $("#upload-form").addEventListener("submit", async (evt) => {
     evt.preventDefault();
     const file = $("#upload-file").files[0];

@@ -41,8 +41,12 @@
             en een bedragkolom (<code>cashflow</code>, <code>bedrag</code> of <code>amount</code>).
           </p>
           <form id="upload-form" class="kv-upload-form">
-            <input type="file" id="upload-file" accept=".csv,text/csv" required
-                   aria-label="CSV-bestand met kasstromen" />
+            <div class="kv-file-input">
+              <label for="upload-file" class="rvo-button rvo-button--secondary rvo-button--size-sm">Bestand kiezen</label>
+              <span id="upload-file-name" class="kv-file-input__name">Geen bestand gekozen</span>
+              <input type="file" id="upload-file" class="kv-visually-hidden" accept=".csv,text/csv" required
+                     aria-label="CSV-bestand met kasstromen" />
+            </div>
             <button type="submit" class="rvo-button rvo-button--primary rvo-button--size-sm">Uploaden</button>
             <button type="button" id="btn-demo" class="rvo-button rvo-button--secondary rvo-button--size-sm">
               Demo-data laden
