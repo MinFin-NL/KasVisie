@@ -198,3 +198,7 @@ cython_debug/
 # Data folder (echte datasets blijven lokaal, niet in git)
 data/*
 !data/.gitkeep
+
+# Claude stuff
+claude.md
+.claude

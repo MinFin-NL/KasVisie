@@ -2,17 +2,22 @@
 
 from __future__ import annotations
 
+from datetime import date as _date
 from pathlib import Path
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import Body, FastAPI, HTTPException, UploadFile
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import models
+from . import export, modelcard, models
 from .data import NL_HOLIDAYS, STORE, parse_csv
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+# De modellen zijn deterministisch (random_state=0), dus een prognose hoeft per
+# (dataset, model) maar één keer berekend te worden. Scheelt ~600 ms per klik.
+_FORECAST_CACHE: dict[tuple[int, str], dict] = {}
 
 app = FastAPI(title="KasVisie", version="0.2.0")
 STORE.load_default()
@@ -20,7 +25,13 @@ STORE.load_default()
 
 @app.get("/api/status")
 def status() -> dict:
-    return {**STORE.summary(), "models": [{"key": k, "label": v} for k, v in models.MODELS.items()]}
+    return {
+        **STORE.summary(),
+        "models": [
+            {"key": k, "label": v, "description": models.MODEL_DESCRIPTIONS.get(k, "")}
+            for k, v in models.MODELS.items()
+        ],
+    }
 
 
 @app.post("/api/upload")
@@ -31,12 +42,14 @@ async def upload(file: UploadFile) -> dict:
     except (ValueError, UnicodeDecodeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     STORE.set_frame(df, source=file.filename or "upload.csv")
+    _FORECAST_CACHE.clear()
     return STORE.summary()
 
 
 @app.post("/api/demo")
 def demo() -> dict:
     STORE.load_demo()
+    _FORECAST_CACHE.clear()
     return STORE.summary()
 
 
@@ -66,13 +79,20 @@ def forecast(model: str = "gbr") -> dict:
     if not STORE.ready:
         raise HTTPException(status_code=409, detail="Te weinig data voor een prognose (minimaal 60 dagen).")
 
+    key = (STORE.version, model)
+    if key not in _FORECAST_CACHE:
+        _FORECAST_CACHE[key] = _compute_forecast(model)
+    return _FORECAST_CACHE[key]
+
+
+def _compute_forecast(model: str) -> dict:
     df = STORE.df
     last_obs = df["date"].max()
-    today = last_obs + pd.Timedelta(days=1)  # eerste dag zonder realisatie
-    month_start = today.replace(day=1)
+    forecast_start = last_obs + pd.Timedelta(days=1)  # eerste dag zonder realisatie
+    month_start = forecast_start.replace(day=1)
     next_month_end = (month_start + pd.offsets.MonthEnd(2)).normalize()
 
-    horizon = pd.date_range(today, next_month_end, freq="D")
+    horizon = pd.date_range(forecast_start, next_month_end, freq="D")
     fc = models.forecast(model, df, horizon)
     metrics = models.backtest(model, pd.DatetimeIndex(df["date"]), df["cashflow"].to_numpy(dtype=float))
 
@@ -110,10 +130,27 @@ def forecast(model: str = "gbr") -> dict:
         vals = [v for v in vals if v is not None]
         return round(sum(vals), 2) if vals else None
 
+    # Ondergrens waaronder een dag structureel gesloten is (weekend/feestdag).
+    # Schaalvrij, zodat de guard ook klopt bij bedragen in miljoenen.
+    positive = [r["pred"] for r in days if r.get("pred") is not None and r["pred"] > 0]
+    drag_floor = round(0.02 * float(pd.Series(positive).median()), 6) if positive else 0.0
+
+    real_today = _date.today()
     return {
         "model": model,
         "modelLabel": models.MODELS[model],
-        "today": today.date().isoformat(),
+        # De eerste dag zonder realisatie. Dit is nadrukkelijk niet "vandaag":
+        # bij verouderde data liggen die dagen ver uit elkaar.
+        "forecastStart": forecast_start.date().isoformat(),
+        "lastObservation": last_obs.date().isoformat(),
+        "today": real_today.isoformat(),
+        "staleDays": (real_today - last_obs.date()).days,
+        "currency": "EUR",
+        "dragFloor": drag_floor,
+        # Modelversie plus vingerafdruk van de trainingsset: samen maken die
+        # een prognose achteraf herleidbaar.
+        "modelVersion": modelcard.version(model),
+        "dataFingerprint": modelcard.data_fingerprint(df),
         "thisMonth": f"{month_start:%Y-%m}",
         "days": days,
         "totals": {
@@ -122,8 +159,52 @@ def forecast(model: str = "gbr") -> dict:
             "thisMonthLastYear": ly_total(this_rows),
             "nextMonthLastYear": ly_total(next_rows),
         },
-        "metrics": metrics,
+        "metrics": {**metrics, "coverage_target": round(100 * (models.Q_HI - models.Q_LO))},
     }
+
+
+@app.get("/api/modelcard")
+def model_card(model: str = "gbr") -> dict:
+    known = {**models.MODELS, **models.FUTURE_MODELS}
+    if model not in known:
+        raise HTTPException(status_code=400, detail=f"Onbekend model '{model}'.")
+    # Metrieken alleen als er genoeg data is; de kaart zelf staat los daarvan.
+    metrics = None
+    if model in models.MODELS and STORE.ready:
+        metrics = forecast(model)["metrics"]
+    return modelcard.build(model, STORE, metrics)
+
+
+CONTENT_TYPES = {
+    "csv": "text/csv; charset=utf-8",
+    "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
+
+
+@app.post("/api/export")
+def export_forecast(payload: dict = Body(...)) -> Response:
+    """Exporteert de prognosehorizon plus één kolom per scenario."""
+    fmt = str(payload.get("format", "csv")).lower()
+    if fmt not in CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail=f"Onbekend formaat '{fmt}'.")
+
+    model = str(payload.get("model", "gbr"))
+    fc = forecast(model)  # hergebruikt de cache en de modelvalidatie
+
+    valid_dates = {d["date"] for d in fc["days"]}
+    try:
+        scenarios = export.clean_scenarios(payload.get("scenarios"), valid_dates)
+    except export.ExportError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    table = export.build_table(fc, scenarios)
+    body = export.to_csv(table) if fmt == "csv" else export.to_xlsx(table, fc, scenarios)
+    name = export.filename(fc, fmt)
+    return Response(
+        content=body,
+        media_type=CONTENT_TYPES[fmt],
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
 
 
 @app.get("/")

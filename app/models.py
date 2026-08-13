@@ -14,11 +14,30 @@ from sklearn.linear_model import Ridge
 
 from .data import NL_HOLIDAYS
 
+# Aangeboden modellen. Voorlopig alleen Gradient Boosting; de UI toont een
+# keuzemenu zodra hier meer dan één model in staat.
 MODELS = {
     "gbr": "Gradient Boosting",
+}
+
+# Wél geïmplementeerd in _fit_predict, nog niet aangeboden. Verplaats een regel
+# hiervandaan naar MODELS om het model weer beschikbaar te maken.
+FUTURE_MODELS = {
     "rf": "Random Forest",
     "ridge": "Ridge-regressie",
     "seasonal": "Seizoensgemiddelde",
+}
+
+# Uitleg in gewone taal: "Gradient Boosting" zegt een kasbeheerder niets.
+MODEL_DESCRIPTIONS = {
+    "gbr": "Leert week- en maandpatronen, ook als die niet rechtlijnig lopen, "
+           "inclusief de pieken rond het maandeinde.",
+    "rf": "Middelt veel beslisbomen. Robuust tegen uitschieters, maar reageert "
+          "trager op een nieuwe trend.",
+    "ridge": "Rechtlijnig model op weekdag, maand en maandeinde. Goed "
+             "navolgbaar en snel, mist grillige pieken.",
+    "seasonal": "Simpel gemiddelde per weekdag en deel van de maand, over de "
+                "laatste 16 weken. Handig als vergelijkingsmaatstaf.",
 }
 
 BACKTEST_DAYS = 28

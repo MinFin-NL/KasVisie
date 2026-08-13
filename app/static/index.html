@@ -25,6 +25,7 @@
         <ul class="kv-tabs">
           <li><a href="#data" id="tab-data" class="kv-tab" aria-current="false">Gegevens</a></li>
           <li><a href="#grafiek" id="tab-grafiek" class="kv-tab" aria-current="false">Prognose</a></li>
+          <li><a href="#model" id="tab-model" class="kv-tab" aria-current="false">Model</a></li>
         </ul>
       </nav>
     </div>
@@ -60,6 +61,8 @@
         </div>
       </div>
 
+      <div id="data-freshness"></div>
+
       <div class="kv-card">
         <h2 class="utrecht-heading-2">Data inspecteren</h2>
         <div class="kv-table-toolbar">
@@ -86,25 +89,71 @@
 
     <!-- ══════════ Scherm 2: prognose ══════════ -->
     <section id="screen-grafiek" hidden>
+      <div id="graph-freshness"></div>
       <div id="kpi-row" class="kv-kpi-row"></div>
       <div id="totals-panel" class="kv-card kv-totals" hidden></div>
 
       <div class="kv-graph-layout">
-        <div class="kv-card kv-chart-card">
+        <div class="kv-card kv-chart-card" id="chart-card">
+          <div class="kv-scenario-bar">
+            <div id="scenario-tabs" class="kv-scenario-tabs" role="tablist" aria-label="Scenario's"></div>
+            <button type="button" id="btn-add-scenario"
+                    class="rvo-button rvo-button--tertiary rvo-button--size-sm">+ Scenario</button>
+          </div>
+
           <div id="chart-legend" class="kv-legend" aria-hidden="false"></div>
           <div class="kv-chart-wrap">
-            <svg id="chart" role="img" aria-label="Kasprognose per dag"></svg>
+            <svg id="chart" aria-label="Kasprognose per dag"></svg>
             <div id="chart-tooltip" class="kv-tooltip" hidden></div>
+            <div class="kv-chart-busy" aria-hidden="true"><span class="kv-spinner"></span>Prognose berekenen…</div>
+
+            <!-- Exacte invoer voor één dag; geopend door klikken of Enter op een punt. -->
+            <div id="point-editor" class="kv-editor" role="dialog" aria-labelledby="editor-title" hidden>
+              <p class="kv-editor__title" id="editor-title"></p>
+              <p class="kv-editor__base" id="editor-base"></p>
+              <label class="rvo-label rvo-label--sm" for="editor-value">Nieuwe waarde (€)</label>
+              <input type="number" id="editor-value" class="utrecht-textbox utrecht-textbox--html-input kv-editor__input"
+                     step="0.01" min="0" inputmode="decimal" />
+              <p class="kv-editor__delta" id="editor-delta"></p>
+              <div class="kv-editor__quick" role="group" aria-label="Snelle stappen">
+                <button type="button" data-pct="-10">&minus;10%</button>
+                <button type="button" data-pct="-5">&minus;5%</button>
+                <button type="button" data-pct="5">+5%</button>
+                <button type="button" data-pct="10">+10%</button>
+              </div>
+              <div class="kv-editor__actions">
+                <button type="button" id="editor-apply" class="rvo-button rvo-button--primary rvo-button--size-sm">Toepassen</button>
+                <button type="button" id="editor-remove" class="rvo-button rvo-button--secondary rvo-button--size-sm">Verwijderen</button>
+                <button type="button" id="editor-cancel" class="rvo-button rvo-button--tertiary rvo-button--size-sm">Annuleren</button>
+              </div>
+            </div>
           </div>
+          <p id="scale-note" class="kv-hint kv-hint--note" hidden></p>
           <p class="utrecht-paragraph kv-hint">
-            Sleep een prognosepunt (rood) omhoog of omlaag om een handmatige bijstelling te maken;
-            latere dagen bewegen evenredig mee.
+            Klik een prognosepunt aan voor een exacte waarde, of sleep het omhoog of omlaag voor een
+            snelle schatting; latere dagen bewegen evenredig mee. Met het toetsenbord: Tab naar een punt,
+            pijltjes voor stappen van 1% (Shift: 10%), Enter voor exacte invoer, Delete om te wissen.
+            Weekend- en feestdagen zijn niet bij te stellen.
           </p>
-          <div id="adjust-bar" class="kv-adjust-bar" hidden>
-            <span id="adjust-info"></span>
-            <button type="button" id="btn-reset-adjust" class="rvo-button rvo-button--tertiary rvo-button--size-sm">
-              Bijstellingen wissen
-            </button>
+
+          <div id="adjust-panel" class="kv-adjust-panel" hidden>
+            <div class="kv-adjust-panel__head">
+              <div class="kv-form-field kv-form-field--inline">
+                <label class="rvo-label rvo-label--sm" for="scenario-name">Scenarionaam</label>
+                <input type="text" id="scenario-name" maxlength="60"
+                       class="utrecht-textbox utrecht-textbox--html-input" />
+              </div>
+              <button type="button" id="btn-dup-scenario"
+                      class="rvo-button rvo-button--secondary rvo-button--size-md">Dupliceren</button>
+              <button type="button" id="btn-del-scenario"
+                      class="rvo-button rvo-button--secondary rvo-button--size-md">Scenario verwijderen</button>
+            </div>
+            <ul id="adjust-list" class="kv-adjust-list"></ul>
+            <div class="kv-adjust-panel__foot">
+              <span id="adjust-info"></span>
+              <button type="button" id="btn-reset-adjust"
+                      class="rvo-button rvo-button--secondary rvo-button--size-sm">Alle bijstellingen wissen</button>
+            </div>
           </div>
         </div>
 
@@ -112,10 +161,14 @@
           <h2 class="utrecht-heading-3">Filters &amp; opties</h2>
 
           <div class="kv-form-field">
-            <label class="rvo-label" for="model-select">Model</label>
-            <div class="rvo-select-wrapper">
-              <select id="model-select" class="utrecht-select"></select>
+            <label class="rvo-label" for="model-select" id="model-label">Model</label>
+            <!-- Keuzemenu verschijnt vanzelf zodra de server meer dan één model
+                 aanbiedt; bij één model staat er een vaste regel. -->
+            <div class="rvo-select-wrapper" id="model-select-wrapper" hidden>
+              <select id="model-select" class="utrecht-select" aria-describedby="model-description"></select>
             </div>
+            <p class="kv-model-static" id="model-static" hidden></p>
+            <p class="kv-field-help" id="model-description"></p>
           </div>
 
           <fieldset class="kv-fieldset">
@@ -133,15 +186,40 @@
                 <input type="checkbox" id="toggle-totals" class="rvo-checkbox__input" />
                 Totale volumes &amp; %-verschil
               </label>
+              <label class="rvo-checkbox rvo-checkbox--not-checked kv-switch">
+                <input type="checkbox" id="toggle-full-scale" class="rvo-checkbox__input" />
+                Volledige schaal (incl. pieken)
+              </label>
             </div>
           </fieldset>
 
+          <div class="kv-form-field">
+            <span class="rvo-label" id="export-label">Exporteren</span>
+            <p class="kv-field-help">
+              Bevat de hele prognoseperiode plus een kolom per scenario.
+            </p>
+            <div class="kv-export-buttons" role="group" aria-labelledby="export-label">
+              <button type="button" id="btn-export-csv"
+                      class="rvo-button rvo-button--secondary rvo-button--size-sm">CSV</button>
+              <button type="button" id="btn-export-xlsx"
+                      class="rvo-button rvo-button--primary rvo-button--size-sm">Excel</button>
+            </div>
+            <p class="kv-field-help" id="export-status" role="status" aria-live="polite"></p>
+          </div>
+
           <p class="kv-meta" id="graph-meta"></p>
+          <p class="kv-meta" id="graph-status" role="status" aria-live="polite"></p>
         </aside>
       </div>
     </section>
+    <!-- ══════════ Scherm 3: modelkaart ══════════ -->
+    <section id="screen-model" hidden aria-label="Modelkaart">
+      <div id="model-card"></div>
+    </section>
   </main>
 
+  <!-- In de documentstroom, niet fixed: als vaste balk dekte deze de tabelrijen
+       en de knop "Bijstellingen wissen" af. -->
   <footer class="kv-footer" role="contentinfo" aria-label="Bèta-melding">
     <div class="rvo-max-width-layout rvo-max-width-layout--lg rvo-max-width-layout-inline-padding--sm kv-footer__inner">
       <div class="rvo-alert rvo-alert--warning rvo-alert--padding-sm kv-footer__alert">

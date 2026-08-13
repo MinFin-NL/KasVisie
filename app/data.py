@@ -22,6 +22,8 @@ class DataStore:
     def __init__(self) -> None:
         self.df: pd.DataFrame | None = None
         self.source: str = "geen"
+        # Loopt op bij elke dataset-wissel; gebruikt als cachesleutel voor prognoses.
+        self.version: int = 0
 
     def load_default(self) -> None:
         if DEFAULT_CSV.exists():
@@ -38,6 +40,7 @@ class DataStore:
     def set_frame(self, df: pd.DataFrame, source: str) -> None:
         self.df = df
         self.source = source
+        self.version += 1
 
     @property
     def ready(self) -> bool:
@@ -45,13 +48,21 @@ class DataStore:
 
     def summary(self) -> dict:
         if self.df is None or self.df.empty:
-            return {"rows": 0, "source": self.source, "start": None, "end": None, "ready": False}
+            return {
+                "rows": 0, "source": self.source, "start": None, "end": None,
+                "ready": False, "today": date.today().isoformat(), "staleDays": None,
+            }
+        end = self.df["date"].max().date()
         return {
             "rows": int(len(self.df)),
             "source": self.source,
             "start": self.df["date"].min().date().isoformat(),
-            "end": self.df["date"].max().date().isoformat(),
+            "end": end.isoformat(),
             "ready": self.ready,
+            # Echte kalenderdatum en de kloof daarmee, zodat de UI niet hoeft te
+            # doen alsof de laatste meetdag "vandaag" is.
+            "today": date.today().isoformat(),
+            "staleDays": (date.today() - end).days,
         }
 
 
