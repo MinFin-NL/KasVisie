@@ -372,11 +372,6 @@ tr.kv-row--closed { background: var(--rvo-color-grijs-100); }
   color: var(--kv-color-text-subtle);
   margin-block: var(--rvo-space-sm) 0;
 }
-.kv-hint--note {
-  color: var(--kv-color-text-muted);
-  font-weight: var(--rvo-font-weight-semibold);
-}
-.kv-hint--note[hidden] { display: none; }
 
 /* ── Scenariotabs ──────────────────────────────────────────── */
 .kv-scenario-bar {
@@ -651,6 +646,64 @@ tr.kv-row--closed { background: var(--rvo-color-grijs-100); }
 .kv-fieldset legend { padding: 0; margin-block-end: var(--rvo-space-xs); }
 
 .kv-switch { padding-block: var(--rvo-space-3xs); }
+
+/* ── Toelichting bij een optie ─────────────────────────────── */
+.kv-switch-row {
+  display: flex;
+  align-items: center;
+  gap: var(--rvo-space-2xs);
+}
+.kv-switch-row .kv-switch { flex: 1 1 auto; }
+
+.kv-info {
+  flex: none;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--rvo-color-lintblauw);
+  border-radius: 50%;
+  background: none;
+  color: var(--rvo-color-lintblauw);
+  font: inherit;
+  font-size: var(--rvo-font-size-xs);
+  font-weight: var(--rvo-font-weight-bold);
+  line-height: 1;
+  cursor: help;
+}
+.kv-info:hover, .kv-info[aria-expanded="true"] {
+  background: var(--rvo-color-lintblauw);
+  color: var(--rvo-color-wit);
+}
+.kv-info:focus-visible {
+  outline: 2px solid var(--rvo-color-lintblauw);
+  outline-offset: 2px;
+}
+
+.kv-help {
+  margin-block: var(--rvo-space-2xs) var(--rvo-space-xs);
+  padding: var(--rvo-space-xs);
+  border-inline-start: 3px solid var(--rvo-color-lintblauw);
+  background: var(--rvo-color-grijs-100);
+  border-radius: var(--rvo-border-radius-sm);
+  font-size: var(--rvo-font-size-xs);
+  line-height: var(--rvo-line-height-md);
+  color: var(--kv-color-text-muted);
+}
+/* Visueel verbergen zonder uit de toegankelijkheidsboom te vallen: met
+   [hidden] of display:none zou aria-describedby niets meer opleveren. */
+.kv-help[data-collapsed="true"] {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 
 .kv-meta {
   font-size: var(--rvo-font-size-xs);

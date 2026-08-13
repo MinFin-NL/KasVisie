@@ -27,7 +27,10 @@ DAY_NAMES = ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag
 BASE_COLUMNS = [
     "Datum", "Weekdag", "Soort", "Bijzonderheid",
     "Werkelijk", "Prognose", "Ondergrens (10%)", "Bovengrens (90%)",
-    "Realisatie vorig jaar", "Verwacht (basis)",
+    # In een spreadsheet is geen tooltip; de kolomnaam moet zelf duidelijk maken
+    # dat de vergelijking 52 weken teruggaat en niet naar dezelfde kalenderdatum.
+    "Vergelijkdatum vorig jaar", "Realisatie vorig jaar",
+    "Verwacht (basis)",
 ]
 
 
@@ -98,6 +101,7 @@ def build_table(forecast: dict, scenarios: list[dict]) -> pd.DataFrame:
             "Prognose": pred,
             "Ondergrens (10%)": day.get("lo"),
             "Bovengrens (90%)": day.get("hi"),
+            "Vergelijkdatum vorig jaar": day.get("lastYearDate"),
             "Realisatie vorig jaar": day.get("lastYearActual"),
             # Wat je verwacht zonder bijstellingen: realisatie als die er is,
             # anders de modelprognose.
@@ -145,6 +149,9 @@ def _meta_rows(forecast: dict, scenarios: list[dict]) -> list[tuple[str, str]]:
         ("Laatste realisatie", forecast.get("lastObservation", "")),
         ("Geëxporteerd op", date.today().isoformat()),
         ("Valuta", forecast.get("currency", "EUR")),
+        ("Vergelijking vorig jaar",
+         f"{forecast.get('lastYearLagDays', 364)} dagen eerder (52 weken), zodat de weekdag "
+         "gelijk blijft; niet dezelfde kalenderdatum"),
         ("Backtest: binnen band", f"{m.get('coverage_pct', '-')}% (doel {m.get('coverage_target', '-')}%)"),
         ("Backtest: pinball-loss", str(m.get("pinball", "-"))),
         ("Aantal scenario's", str(len(scenarios))),
@@ -172,8 +179,8 @@ def to_xlsx(table: pd.DataFrame, forecast: dict, scenarios: list[dict]) -> bytes
         meta = pd.DataFrame(_meta_rows(forecast, scenarios), columns=["Veld", "Waarde"])
         meta.to_excel(writer, sheet_name="Toelichting", index=False)
 
-        money_cols = {c for c in table.columns if c not in
-                      {"Datum", "Weekdag", "Soort", "Bijzonderheid"}}
+        text_cols = {"Datum", "Weekdag", "Soort", "Bijzonderheid", "Vergelijkdatum vorig jaar"}
+        money_cols = {c for c in table.columns if c not in text_cols}
         for sheet_name, frame in (("Prognose", table), ("Totalen", totals), ("Toelichting", meta)):
             ws = writer.sheets[sheet_name]
             ws.freeze_panes = "A2"

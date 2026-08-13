@@ -128,7 +128,6 @@
               </div>
             </div>
           </div>
-          <p id="scale-note" class="kv-hint kv-hint--note" hidden></p>
           <p class="utrecht-paragraph kv-hint">
             Klik een prognosepunt aan voor een exacte waarde, of sleep het omhoog of omlaag voor een
             snelle schatting; latere dagen bewegen evenredig mee. Met het toetsenbord: Tab naar een punt,
@@ -178,17 +177,30 @@
                 <input type="checkbox" id="toggle-next-month" class="rvo-checkbox__input" checked />
                 Volgende maand tonen
               </label>
-              <label class="rvo-checkbox rvo-checkbox--not-checked kv-switch">
-                <input type="checkbox" id="toggle-last-year" class="rvo-checkbox__input" />
-                Realisatie vorig jaar
-              </label>
+              <div class="kv-switch-row">
+                <label class="rvo-checkbox rvo-checkbox--not-checked kv-switch">
+                  <input type="checkbox" id="toggle-last-year" class="rvo-checkbox__input"
+                         aria-describedby="last-year-help" />
+                  Realisatie vorig jaar
+                </label>
+                <button type="button" id="last-year-info" class="kv-info"
+                        aria-expanded="false" aria-controls="last-year-help"
+                        aria-label="Uitleg over de vergelijking met vorig jaar">
+                  <span aria-hidden="true">i</span>
+                </button>
+              </div>
+              <!-- Ingeklapt alleen visueel verborgen, niet met [hidden]: zo blijft
+                   de tekst via aria-describedby beschikbaar voor schermlezers. -->
+              <div id="last-year-help" class="kv-help" data-collapsed="true">
+                Vergelijkt met <strong>52 weken (364 dagen) eerder</strong>, niet met dezelfde
+                kalenderdatum. Een jaar is 52 weken plus één dag, dus dezelfde datum valt vorig
+                jaar op een andere weekdag — dan wordt een maandag tegen een zondag afgezet.
+                Met deze correctie blijft de weekdag gelijk en bevat de vergelijkingsperiode
+                evenveel werk- en weekenddagen.
+              </div>
               <label class="rvo-checkbox rvo-checkbox--not-checked kv-switch">
                 <input type="checkbox" id="toggle-totals" class="rvo-checkbox__input" />
                 Totale volumes &amp; %-verschil
-              </label>
-              <label class="rvo-checkbox rvo-checkbox--not-checked kv-switch">
-                <input type="checkbox" id="toggle-full-scale" class="rvo-checkbox__input" />
-                Volledige schaal (incl. pieken)
               </label>
             </div>
           </fieldset>

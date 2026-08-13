@@ -12,9 +12,6 @@
   // Minimale breedte per dag; daaronder wordt de grafiek onleesbaar en gaat de
   // wrapper horizontaal scrollen in plaats van alles samen te persen.
   const MIN_DAY_PX = 13;
-  // Boven deze verhouding tot de p90 beschouwen we pieken als uitschieters en
-  // knijpen we de as af, anders verdwijnt het dagpatroon in de onderste 8%.
-  const OUTLIER_FACTOR = 4;
   // Verplaatsing waaronder een muisactie als klik geldt in plaats van als sleep.
   const CLICK_SLOP_PX = 4;
 
@@ -53,14 +50,6 @@
     return ticks;
   }
 
-  function quantile(sorted, q) {
-    if (!sorted.length) return 0;
-    const pos = (sorted.length - 1) * q;
-    const base = Math.floor(pos), rest = pos - base;
-    const next = sorted[base + 1];
-    return next === undefined ? sorted[base] : sorted[base] + rest * (next - sorted[base]);
-  }
-
   const fmtDay = (iso) => `${iso.slice(8, 10)}-${iso.slice(5, 7)}`;
 
   function linePath(pts) {
@@ -68,13 +57,13 @@
   }
 
   // days: [{date, actual, pred, lo, hi, lastYearActual, weekend, holiday}]
-  // opts: {forecastStart, thisMonth, tooltipEl, dragFloor, fullScale, focusDate,
+  // opts: {forecastStart, thisMonth, tooltipEl, dragFloor, focusDate,
   //        scenarios: [{id, name, color, active, values: []}],
   //        fmtMoney, fmtAxis, onAdjust(date, value), onOpenEditor(date)}
   window.KVChart = function render(svg, days, opts) {
     svg.innerHTML = "";
     const n = days.length;
-    if (!n) return { series: [], scenarios: [], clipped: 0 };
+    if (!n) return { series: [], scenarios: [] };
 
     const scenarios = opts.scenarios || [];
     const active = scenarios.find((s) => s.active) || null;
@@ -95,28 +84,22 @@
     const x = (i) => M.l + (iw * (i + 0.5)) / n;
     const band = iw / n;
 
-    // ── Y-domein: uitschieters afknijpen tenzij volledige schaal gevraagd is ──
-    const plotted = [];
+    // ── Y-domein: altijd de volledige reeks, inclusief pieken ──
+    let dataMax = 0;
     for (const d of days) {
       for (const k of ["actual", "hi", "pred", "lastYearActual"]) {
-        if (d[k] != null) plotted.push(d[k]);
+        if (d[k] != null && d[k] > dataMax) dataMax = d[k];
       }
     }
     for (const s of scenarios) {
-      for (const v of s.values) if (v != null) plotted.push(v);
+      for (const v of s.values) if (v != null && v > dataMax) dataMax = v;
     }
-    const sorted = plotted.slice().sort((a, b) => a - b);
-    const dataMax = sorted.length ? sorted[sorted.length - 1] : 1;
-    const p90 = quantile(sorted, 0.9);
-    const clipping = !opts.fullScale && p90 > 0 && dataMax > OUTLIER_FACTOR * p90;
-    const domainTop = clipping ? OUTLIER_FACTOR * p90 : dataMax;
 
-    const yTicks = niceTicks((domainTop || 1) * 1.05, 5);
+    const yTicks = niceTicks((dataMax || 1) * 1.05, 5);
     const yTop = yTicks[yTicks.length - 1];
     const y = (v) => M.t + ih - (ih * Math.min(v, yTop)) / yTop;
-    const isAbove = (v) => v != null && v > yTop;
 
-    // Clip-pad zodat afgeknepen lijnen netjes bij de bovenrand stoppen.
+    // Clip-pad zodat een dikke lijn op de bovenrand niet buiten het vlak steekt.
     const clipId = "kv-plot-clip";
     const defs = el("defs", {}, svg);
     el("rect", { x: M.l, y: M.t, width: iw, height: ih },
@@ -230,21 +213,6 @@
         "stroke-linejoin": "round",
       }, plot);
       drawnScenarios.push(s);
-    }
-
-    // ── Markering van afgeknepen waarden ──
-    let clippedCount = 0;
-    if (clipping) {
-      days.forEach((d, i) => {
-        const vals = ["actual", "pred", "lastYearActual"].map((k) => d[k])
-          .concat(scenarios.map((s) => s.values[i]));
-        if (!vals.some(isAbove)) return;
-        clippedCount++;
-        el("path", {
-          d: `M${(x(i) - 4).toFixed(1)},${M.t + 6} L${x(i).toFixed(1)},${M.t + 1} L${(x(i) + 4).toFixed(1)},${M.t + 6}`,
-          fill: "none", stroke: COLORS.pred, "stroke-width": 2, "stroke-linecap": "round",
-        }, svg);
-      });
     }
 
     // ── Bedienbare prognosepunten ──
@@ -404,7 +372,12 @@
         if (s.values[i] == null) continue;
         rows.push(`<span style="color:${s.color}">■</span> ${s.name}: ${opts.fmtMoney(s.values[i])}`);
       }
-      if (d.lastYearActual != null) rows.push(`Vorig jaar: ${opts.fmtMoney(d.lastYearActual)}`);
+      if (d.lastYearActual != null) {
+        // Datum erbij: de vergelijking loopt 52 weken terug, niet naar dezelfde
+        // kalenderdatum, en dat moet je kunnen zien.
+        const when = d.lastYearDate ? ` (${fmtDay(d.lastYearDate)})` : "";
+        rows.push(`Vorig jaar${when}: ${opts.fmtMoney(d.lastYearActual)}`);
+      }
       if (extra) rows.push(extra);
 
       tip.innerHTML = rows.filter(Boolean).join("<br>");
@@ -426,8 +399,6 @@
     return {
       series: drawn,
       scenarios: drawnScenarios,
-      clipped: clippedCount,
-      clipping,
       dataMax,
       shownTop: yTop,
       scrolls,

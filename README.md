@@ -20,8 +20,7 @@ Utrecht-componenten) en een FastAPI-backend. Alles draait in één Docker-contai
      bijstellingen en een eigen toekomstpad, samen in de grafiek;
    - export naar CSV of Excel van de hele prognoseperiode, met een kolom per
      scenario (Excel bevat ook maandtotalen en een toelichtingsblad);
-   - toggles voor volgende maand, realisatie van vorig jaar, totale volumes en
-     volledige schaal;
+   - toggles voor volgende maand, realisatie van vorig jaar en totale volumes;
    - uitleg bij het gebruikte model. Zolang er één model aangeboden wordt staat
      de naam vast; biedt de server er meer aan, dan verschijnt het keuzemenu
      vanzelf.
@@ -51,6 +50,16 @@ Alleen modellen in `models.MODELS` worden aangeboden; `models.FUTURE_MODELS`
 bevat wél geïmplementeerde maar nog niet vrijgegeven modellen. Verplaats een
 regel tussen die twee om een model beschikbaar te maken of terug te trekken — de
 frontend past zich aan zonder wijziging.
+
+### Vergelijking met vorig jaar
+
+"Realisatie vorig jaar" loopt **52 weken (364 dagen)** terug, niet naar dezelfde
+kalenderdatum. Een jaar is 52 weken plus één dag, dus dezelfde datum valt vorig
+jaar op een andere weekdag — dan wordt een maandag tegen een zondag afgezet, wat
+bij dagontvangsten het beeld volledig vertekent. Met deze correctie blijft de
+weekdag gelijk en bevatten beide periodes evenveel werk- en weekenddagen, wat ook
+de maandtotalen eerlijker vergelijkbaar maakt. De grafiek-tooltip en de export
+tonen expliciet welke dag ertegenover staat.
 
 ### Grenzen aan bijstellingen
 

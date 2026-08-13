@@ -41,6 +41,10 @@ CHANGELOG: dict[str, list[dict]] = {
                 "Alleen Gradient Boosting wordt nog aangeboden; de overige modellen "
                 "zijn tijdelijk uit de selectie gehaald.",
                 "Modelkaart en versieregistratie toegevoegd.",
+                "Vergelijking met vorig jaar loopt nu 52 weken (364 dagen) terug in "
+                "plaats van naar dezelfde kalenderdatum. Daarmee vallen de weekdagen "
+                "gelijk; voorheen werd bijvoorbeeld een maandag tegen een zondag "
+                "afgezet, wat het beeld sterk vertekende.",
             ],
         },
         {
@@ -89,6 +93,17 @@ HYPERPARAMETERS = [
     ("Maximale diepte", "3"),
     ("random_state", "0 — vaste waarde, dus dezelfde data geeft dezelfde uitkomst"),
 ]
+
+# Geen modelstap, maar wel een keuze die het beeld bepaalt en dus vastgelegd
+# hoort te zijn.
+COMPARISON = (
+    "De vergelijking met vorig jaar loopt 52 weken (364 dagen) terug, niet naar "
+    "dezelfde kalenderdatum. Een jaar is 52 weken plus één dag, dus dezelfde datum "
+    "valt vorig jaar op een andere weekdag; bij dagontvangsten die sterk van de "
+    "weekdag afhangen zou een maandag dan tegen een zondag worden afgezet. Met deze "
+    "correctie blijft de weekdag gelijk en bevatten beide periodes evenveel werk- "
+    "en weekenddagen."
+)
 
 POSTPROCESSING = [
     "Op weekend- en feestdagen wordt de voorspelling begrensd op het mediane niveau "
@@ -178,6 +193,7 @@ def build(model_key: str, store, metrics: dict | None) -> dict:
             "features": [{"name": n, "label": l, "why": w} for n, l, w in FEATURES],
             "hyperparameters": [{"name": n, "value": v} for n, v in HYPERPARAMETERS],
             "postprocessing": POSTPROCESSING,
+            "comparison": COMPARISON,
             "backtestDays": models.BACKTEST_DAYS,
             "quantiles": [models.Q_LO, models.Q_HI],
         },

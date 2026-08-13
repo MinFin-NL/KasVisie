@@ -366,7 +366,6 @@
       const showNext = $("#toggle-next-month").checked;
       const showLastYear = $("#toggle-last-year").checked;
       const showTotals = $("#toggle-totals").checked;
-      const fullScale = $("#toggle-full-scale").checked;
       const floor = fc.dragFloor || 0;
 
       // Paden over de volle horizon; daarna pas filteren voor de weergave.
@@ -433,7 +432,6 @@
         tooltipEl: $("#chart-tooltip"),
         dragFloor: floor,
         ratioMax: RATIO_MAX,
-        fullScale,
         scenarios: chartScenarios,
         focusDate: this.focusDate,
         fmtMoney,
@@ -445,7 +443,6 @@
       this.lastInfo = info;
       this.lastForecast = fc;
       this.renderLegend(info, days);
-      this.renderScaleNote(info);
       this.renderAdjustPanel(fc, floor);
       if (this.editorDate) this.positionEditor();
 
@@ -665,15 +662,6 @@
       }
     },
 
-    renderScaleNote(info) {
-      const note = $("#scale-note");
-      if (!info || !info.clipping) { note.hidden = true; return; }
-      note.hidden = false;
-      note.textContent =
-        `${info.clipped} dag${info.clipped > 1 ? "en lopen" : " loopt"} boven de as
-         (tot ${fmtMoney0(info.dataMax)}). Zet "Volledige schaal" aan om ze helemaal te zien.`;
-    },
-
     renderKpis(fc, totThis, totNext, showNext, noteThis, noteNext) {
       const cov = fc.metrics.coverage_pct;
       const target = fc.metrics.coverage_target;
@@ -713,15 +701,21 @@
           <td>${fmtMoney0(now)}</td>
           <td>${fmtMoney0(then)}</td>
           <td>${pct(now, then)}</td></tr>`;
+      const lag = fc.lastYearLagDays || 364;
       panel.innerHTML = `
         <h2 class="utrecht-heading-3">Totale volumes t.o.v. vorig jaar</h2>
         <table>
-          <thead><tr><th>Periode</th><th>Verwacht/gerealiseerd</th><th>Vorig jaar</th><th>Verschil</th></tr></thead>
+          <thead><tr><th>Periode</th><th>Verwacht/gerealiseerd</th>
+            <th>Vorig jaar</th><th>Verschil</th></tr></thead>
           <tbody>
             ${row(monthLabel(fc.thisMonth), t.totThis, t.lyThis)}
             ${row("volgende maand", t.totNext, t.lyNext)}
           </tbody>
-        </table>`;
+        </table>
+        <p class="kv-hint">
+          "Vorig jaar" is de periode van ${lag} dagen (${Math.round(lag / 7)} weken) eerder, zodat
+          de weekdagen gelijk lopen en beide periodes evenveel werk- en weekenddagen bevatten.
+        </p>`;
     },
 
     /* De legenda volgt wat er daadwerkelijk getekend is; anders staat er een
@@ -860,6 +854,9 @@
 
         <h3 class="utrecht-heading-4">Nabewerking</h3>
         <ul class="kv-list">${h.postprocessing.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>
+
+        <h3 class="utrecht-heading-4">Vergelijking met vorig jaar</h3>
+        <p class="utrecht-paragraph">${escapeHtml(h.comparison || "")}</p>
       </div>`;
     },
 
@@ -970,7 +967,7 @@
     graphScreen.renderModelDescription();
     graphScreen.render();
   });
-  for (const id of ["#toggle-next-month", "#toggle-last-year", "#toggle-totals", "#toggle-full-scale"]) {
+  for (const id of ["#toggle-next-month", "#toggle-last-year", "#toggle-totals"]) {
     $(id).addEventListener("change", () => graphScreen.render());
   }
 
@@ -1075,6 +1072,46 @@
       graphScreen.focusDate = evt.target.dataset.date;
     }
   });
+
+  /* Toelichting bij "Realisatie vorig jaar". Voldoet aan WCAG 1.4.13: te sluiten
+     met Escape, de muis kan er overheen zonder dat hij verdwijnt, en hij blijft
+     staan tot je hem sluit. */
+  (function initInfo() {
+    const btn = $("#last-year-info"), help = $("#last-year-help");
+    let pinned = false, hideTimer = null;
+
+    const show = () => {
+      clearTimeout(hideTimer);
+      help.dataset.collapsed = "false";
+      btn.setAttribute("aria-expanded", "true");
+    };
+    const hide = (force) => {
+      if (pinned && !force) return;
+      clearTimeout(hideTimer);
+      // Korte vertraging zodat de muis van de knop naar de tekst kan bewegen.
+      hideTimer = setTimeout(() => {
+        help.dataset.collapsed = "true";
+        btn.setAttribute("aria-expanded", "false");
+      }, 150);
+    };
+
+    btn.addEventListener("pointerenter", show);
+    btn.addEventListener("focus", show);
+    btn.addEventListener("pointerleave", () => hide());
+    btn.addEventListener("blur", () => hide());
+    help.addEventListener("pointerenter", () => clearTimeout(hideTimer));
+    help.addEventListener("pointerleave", () => hide());
+    btn.addEventListener("click", () => {
+      pinned = !pinned;
+      if (pinned) show(); else hide(true);
+    });
+    document.addEventListener("keydown", (evt) => {
+      if (evt.key !== "Escape" || help.dataset.collapsed === "true") return;
+      pinned = false;
+      hide(true);
+      btn.focus();
+    });
+  })();
 
   $("#btn-export-csv").addEventListener("click", () => graphScreen.exportAs("csv"));
   $("#btn-export-xlsx").addEventListener("click", () => graphScreen.exportAs("xlsx"));

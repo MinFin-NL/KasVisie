@@ -19,6 +19,15 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 # (dataset, model) maar één keer berekend te worden. Scheelt ~600 ms per klik.
 _FORECAST_CACHE: dict[tuple[int, str], dict] = {}
 
+# Vergelijking met vorig jaar loopt 52 weken terug, niet één kalenderjaar.
+# Een jaar is 52 weken plus één dag, dus dezelfde kalenderdatum valt vorig jaar
+# op een andere weekdag: een maandag zou tegen een zondag worden afgezet en een
+# zaterdag tegen een vrijdag. Bij dagontvangsten die vooral van de weekdag
+# afhangen vertekent dat het beeld volledig. 364 dagen houdt de weekdag gelijk
+# en levert bovendien een vergelijkingsvenster met exact dezelfde verdeling
+# werk- en weekenddagen.
+LAST_YEAR_LAG = pd.Timedelta(weeks=52)
+
 app = FastAPI(title="KasVisie", version="0.2.0")
 STORE.load_default()
 
@@ -100,7 +109,7 @@ def _compute_forecast(model: str) -> dict:
     fc = fc.set_index("date")
 
     def day_row(d: pd.Timestamp) -> dict:
-        ly = d - pd.DateOffset(years=1)
+        ly = d - LAST_YEAR_LAG
         ly_val = actuals.get(ly)
         row = {
             "date": d.date().isoformat(),
@@ -108,6 +117,8 @@ def _compute_forecast(model: str) -> dict:
             "holiday": NL_HOLIDAYS.get(d.date()),
             "actual": round(float(actuals[d]), 2) if d in actuals.index else None,
             "lastYearActual": round(float(ly_val), 2) if ly_val is not None and not pd.isna(ly_val) else None,
+            # Welke dag er precies tegenover staat; zichtbaar in de tooltip.
+            "lastYearDate": ly.date().isoformat() if ly_val is not None and not pd.isna(ly_val) else None,
         }
         if d in fc.index:
             row |= {k: round(float(fc.loc[d, k]), 2) for k in ("pred", "lo", "hi")}
@@ -151,6 +162,7 @@ def _compute_forecast(model: str) -> dict:
         # een prognose achteraf herleidbaar.
         "modelVersion": modelcard.version(model),
         "dataFingerprint": modelcard.data_fingerprint(df),
+        "lastYearLagDays": int(LAST_YEAR_LAG.days),
         "thisMonth": f"{month_start:%Y-%m}",
         "days": days,
         "totals": {
