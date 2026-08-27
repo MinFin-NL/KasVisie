@@ -150,11 +150,15 @@ gegenereerde demo-data (30 maanden, incl. vorig jaar).
 
 ## Lokaal ontwikkelen
 
+De app draait op **Python 3.11** — dezelfde versie als de container
+(`python:3.11-slim`). `.python-version` zet die vast voor pyenv; alle pins in
+`requirements.txt` zijn op 3.11 geresolved en getest.
+
 Eén proces: uvicorn serveert zowel de API als de frontend, precies zoals de
 container dat doet.
 
 ```sh
-python -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate               # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 python scripts/fetch_nldd.py            # één keer na het clonen
