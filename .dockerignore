@@ -1,0 +1,12 @@
+# node_modules en dist komen uit de frontend-stage, niet van de bouwmachine:
+# zo bakt een lokale build hetzelfde image als de pipeline.
+node_modules/
+dist/
+
+.git
+.venv
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.idea/

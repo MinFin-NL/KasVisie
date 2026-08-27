@@ -2,18 +2,25 @@
 
 from __future__ import annotations
 
+import os
 from datetime import date as _date
 from pathlib import Path
 
 import pandas as pd
 from fastapi import Body, FastAPI, HTTPException, UploadFile
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 
 from . import export, modelcard, models
 from .data import NL_HOLIDAYS, STORE, parse_csv
 
-STATIC_DIR = Path(__file__).resolve().parent / "static"
+# De frontend is een Vite-bundel: `npm run build` zet het resultaat in dist/,
+# inclusief het NLDD Design System dat als npm-afhankelijkheid meegebundeld
+# wordt. In de container ligt dist/ niet naast de geïnstalleerde app (die draait
+# uit site-packages), dus wijst de Dockerfile hem aan met KASVISIE_DIST.
+DIST_DIR = Path(
+    os.environ.get("KASVISIE_DIST", Path(__file__).resolve().parent.parent / "dist")
+)
 
 # De modellen zijn deterministisch (random_state=0), dus een prognose hoeft per
 # (dataset, model) maar één keer berekend te worden. Scheelt ~600 ms per klik.
@@ -219,9 +226,14 @@ def export_forecast(payload: dict = Body(...)) -> Response:
     )
 
 
-@app.get("/")
-def index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+if not DIST_DIR.is_dir():
+    # Meteen falen is duidelijker dan een 404 op de startpagina: de frontend is
+    # niet gebouwd.
+    raise RuntimeError(
+        f"Frontend-bundel niet gevonden in {DIST_DIR}. "
+        "Draai `npm ci && npm run build` (of zet KASVISIE_DIST)."
+    )
 
-
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+# Als laatste gemount: routes worden op volgorde gematcht, dus /api/* wint van
+# deze mount. html=True serveert index.html op /.
+app.mount("/", StaticFiles(directory=DIST_DIR, html=True), name="frontend")

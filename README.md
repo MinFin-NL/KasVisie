@@ -1,8 +1,9 @@
 # KasVisie — Kasprognose-dashboard
 
-Interactief dashboard voor dagelijkse kasstroomprognoses, gebouwd met
-[NL Design System](https://nldesignsystem.nl/) (Rijkshuisstijl Community-tokens +
-Utrecht-componenten) en een FastAPI-backend. Alles draait in één Docker-container.
+Interactief dashboard voor dagelijkse kasstroomprognoses, gebouwd met het
+[NLDD Design System](https://minbzk.github.io/storybook/) (`@nldd/design-system`,
+Nederlandse Digitale Dienst) en een FastAPI-backend. Alles draait in één
+Docker-container.
 
 ## Schermen
 
@@ -68,7 +69,68 @@ Die verhouding is begrensd op 0,2× – 5×, zowel per losse bijstelling als
 cumulatief. Weekend- en feestdagen zijn niet bij te stellen: hun prognose is
 structureel nul, waardoor een verhouding daar betekenisloos is.
 
+## Frontend en design system
+
+De frontend is platte HTML, CSS en JavaScript — geen framework — gebundeld met
+[Vite](https://vite.dev), net als de invulhulp. De UI is opgebouwd uit de web
+components van het NLDD Design System, dat als gewone npm-afhankelijkheid in
+`package.json` staat en door Vite wordt meegebundeld; er staat dus geen kopie in
+de repo.
+
+| Pad | Wat het is |
+| --- | --- |
+| `index.html` | de pagina; laadt alleen `/src/main.js` als module |
+| `src/main.js` | entry: importeert het design system (componenten + globale stylesheet), `style.css` en `app.js` |
+| `src/app.js` | de drie schermen, de gegenereerde markup en alle `/api`-aanroepen |
+| `src/chart.js` | de SVG-grafiek; exporteert `KVChart`, geïmporteerd door `app.js` |
+| `src/style.css` | eigen CSS bovenop de componenten |
+| `dist/` | het bouwresultaat dat FastAPI serveert (niet in git) |
+
+De importvolgorde in `main.js` is functioneel: ES-modules draaien in
+importvolgorde, dus het design system registreert al zijn custom elements
+vóór `app.js` de eerste markup opbouwt. Een `nldd-*`-element dat naar zijn
+inhoud kijkt terwijl die er nog niet is trekt anders de verkeerde conclusie —
+`nldd-menu-bar` zet zichzelf op `empty` en verdwijnt.
+
+Bouwen:
+
+```sh
+npm ci
+npm run build     # → dist/
+```
+
+Upgraden van het design system:
+
+```sh
+npm install @nldd/design-system@0.9.0   # past package.json én de lockfile aan
+```
+
+Commit daarna beide manifesten.
+
+Lees vóór een upgrade elke `Breaking`-sectie tussen je huidige en de doelversie
+in de [changelog](https://github.com/MinBZK/storybook/blob/main/skills/nldd/changelog.md):
+semantic-release verhoogt ook bij een breaking change alleen het patch-nummer, dus
+het versienummer alleen zegt niets.
+
+Eigen CSS (`src/style.css`) blijft beperkt tot wat geen component is: de
+twee paginarasters, de grafiek en de twee panelen die zich aan de grafiek
+verankeren. Alle waarden komen uit de NLDD-variabelen, met één bewuste
+uitzondering: het categorische grafiekpalet (`--kv-series-*`), dat CVD-veilig en
+onderling onderscheidbaar moet zijn en daarom buiten de huisstijl valt. De
+grafiek*chroom* (raster, assen) komt wél uit de semantics en beweegt dus mee met
+het licht/donker-schema.
+
+**Fonts.** RijksSans is auteursrechtelijk beschermd en uitsluitend bestemd voor
+publicaties van de Rijksoverheid en partijen die in haar opdracht werken; zie
+`node_modules/@nldd/design-system/NOTICES.md`. Buiten dat kader vervang je in
+`src/main.js` de import `@nldd/design-system/styles` door
+`@nldd/design-system/styles/system-font` — dezelfde stijlen zonder de
+`@font-face`-regels.
+
 ## Draaien met Docker
+
+De build draait Vite zelf in een `node`-stage; je hebt lokaal geen Node nodig,
+wel netwerk naar het npm-register.
 
 ```sh
 docker build -t kasvisie .
@@ -80,10 +142,27 @@ gegenereerde demo-data (30 maanden, incl. vorig jaar).
 
 ## Lokaal ontwikkelen
 
+Twee processen: uvicorn voor de API, Vite voor de frontend. Vite proxyt alles
+onder `/api` naar de backend, dus de frontend gebruikt dezelfde paden als in
+productie.
+
 ```sh
-uv sync
-uv run uvicorn app.main:app --reload
+uv sync && npm ci
+
+uv run uvicorn app.main:app --reload    # terminal 1 — API op :8000
+npm run dev                             # terminal 2 — pagina op :5173, met hot reload
 ```
+
+Wil je in één keer zien wat de container serveert, bouw dan de bundel en laat
+uvicorn hem serveren:
+
+```sh
+npm run build
+uv run uvicorn app.main:app --reload    # serveert dist/ op :8000
+```
+
+De backend weigert te starten zonder `dist/`; met alleen `npm run dev` bouw je
+die niet, dus draai `npm run build` één keer na het clonen.
 
 ## Licentie
 

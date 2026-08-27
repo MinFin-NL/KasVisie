@@ -1,4 +1,10 @@
-/* KasVisie frontend: twee schermen (gegevens + prognose) op één pagina. */
+/* KasVisie frontend: drie schermen (gegevens, prognose, modelkaart) op één
+   pagina, opgebouwd uit de web components van het NLDD Design System. Alle
+   markup die hier gegenereerd wordt gebruikt nldd-*-elementen; eigen markup
+   blijft beperkt tot wat geen component is (de grafiek en de twee panelen die
+   zich daaraan verankeren). */
+
+import KVChart from "./chart.js";
 
 (function () {
   "use strict";
@@ -39,6 +45,68 @@
     String(s).replace(/[&<>"']/g, (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+  /* ── Bouwstenen ────────────────────────────────────────────
+     Kleine helpers rond de componenten die hier het vaakst terugkomen, zodat
+     de attribuutnamen op één plek staan. */
+
+  // Paginabrede terugkoppeling. nldd-banner zet role en aria-live zelf op basis
+  // van de variant; niet overschrijven.
+  const banner = (variant, text, body) =>
+    `<nldd-banner variant="${variant}" size="sm" text="${escapeHtml(text)}">${body || ""}</nldd-banner>`;
+
+  const richText = (html, spacing) =>
+    `<nldd-rich-text spacing="${spacing || "tight"}">${html}</nldd-rich-text>`;
+
+  // Label-waardepaar. nldd-description-cell is precies dat; een <dl> zou het
+  // met eigen CSS nabouwen.
+  const defItem = (label, valueHtml) =>
+    `<nldd-list-item size="sm">
+       <nldd-description-cell>
+         <span slot="title">${escapeHtml(label)}</span>
+         <span slot="description">${valueHtml}</span>
+       </nldd-description-cell>
+     </nldd-list-item>`;
+
+  const defList = (pairs, label) =>
+    `<nldd-list variant="simple" dividers="never" accessible-label="${escapeHtml(label)}">
+       ${pairs.map(([k, v]) => defItem(k, v)).join("")}
+     </nldd-list>`;
+
+  const card = (bodyHtml, gap) =>
+    `<nldd-card><nldd-container padding="24" gap="${gap || 16}">${bodyHtml}</nldd-container></nldd-card>`;
+
+  const heading = (level, size, text) =>
+    `<nldd-title size="${size}"><h${level}>${escapeHtml(text)}</h${level}></nldd-title>`;
+
+  const cell = (text, opts) => {
+    const o = opts || {};
+    return `<nldd-text-cell text="${escapeHtml(text)}"` +
+      (o.align ? ` horizontal-alignment="${o.align}"` : "") +
+      (o.color ? ` color="${o.color}"` : "") +
+      (o.hideBelow ? ` hide-below="${o.hideBelow}"` : "") +
+      (o.width ? ` width="${o.width}"` : "") +
+      `></nldd-text-cell>`;
+  };
+
+  /* nldd-dropdown leest de zichtbare waarde uit het geslotte <select> bij
+     slotchange en bij change. Nieuwe <option>-elementen in hetzélfde select
+     vuren geen slotchange, dus het menu zou leeg blijven staan; het select
+     wordt daarom als geheel vervangen. Dat is precies de weg die het component
+     wél waarneemt, en het houdt de browser eigenaar van toetsenbord,
+     formulierwaarde en toegankelijkheid. */
+  function fillSelect(id, options, value, onChange) {
+    const old = document.getElementById(id);
+    const select = document.createElement("select");
+    for (const a of old.attributes) select.setAttribute(a.name, a.value);
+    select.innerHTML = options
+      .map(([v, label]) => `<option value="${escapeHtml(v)}">${escapeHtml(label)}</option>`)
+      .join("");
+    if (value != null) select.value = value;
+    select.addEventListener("change", onChange);
+    old.replaceWith(select);
+    return select;
+  }
+
   /* Bijstellingen: een sleep of invoer verandert de prognose met een verhouding
      die uitdooft over latere dagen. De verhouding wordt begrensd, anders laat
      één actie op een dag met een prognose van bijna nul het totaal ontploffen. */
@@ -70,27 +138,28 @@
     for (const [hash, s] of Object.entries(SCREENS)) {
       const active = hash === current;
       $(s.section).hidden = !active;
-      $(s.tab).setAttribute("aria-current", String(active));
+      // nldd-menu-bar-item zet zelf aria-current="page" op de link.
+      $(s.tab).toggleAttribute("current", active);
     }
     SCREENS[current].show();
   }
 
   /* Melding over de actualiteit van de dataset. De app rekent vanaf de laatste
      meetdag; als die ver achterloopt moet dat expliciet zichtbaar zijn. */
-  function freshnessHtml(info) {
+  function freshnessBanner(info) {
     if (!info) return "";
     // De samenvatting noemt de laatste meetdag "end", de prognose
     // "lastObservation"; beide schermen gebruiken deze melding.
     const last = info.end || info.lastObservation;
     if (info.staleDays == null || !last) return "";
     if (info.staleDays <= 2) return "";
-    const level = info.staleDays > 31 ? "warning" : "info";
-    return `<div class="rvo-alert rvo-alert--${level} rvo-alert--padding-sm kv-alert">
-      <div class="rvo-alert__container">
-        Data loopt t/m <strong>${dateLabel(last)}</strong> — ${info.staleDays} dagen geleden.
-        De prognose start daarom op ${dateLabel(info.forecastStart || last)}, niet vandaag.
-      </div>
-    </div>`;
+    const variant = info.staleDays > 31 ? "warning" : "accent";
+    return banner(
+      variant,
+      `Data loopt t/m ${dateLabel(last)} — ${info.staleDays} dagen geleden.`,
+      richText(`<p>De prognose start daarom op
+        ${escapeHtml(dateLabel(info.forecastStart || last))}, niet vandaag.</p>`, "flat")
+    );
   }
 
   /* ── Scherm 1: gegevens ────────────────────────────────── */
@@ -114,63 +183,76 @@
     },
 
     renderSummary(s) {
-      $("#dataset-summary").innerHTML = `
-        <dt>Bron</dt><dd>${escapeHtml(s.source)}</dd>
-        <dt>Aantal dagen</dt><dd>${s.rows}</dd>
-        <dt>Periode</dt><dd>${s.start} t/m ${s.end}</dd>
-        <dt>Status</dt><dd>${s.ready ? "voldoende data voor prognose" : "te weinig data (min. 60 dagen)"}</dd>`;
-      $("#data-freshness").innerHTML = freshnessHtml(s);
+      $("#dataset-summary").innerHTML = [
+        ["Bron", escapeHtml(s.source)],
+        ["Aantal dagen", String(s.rows)],
+        ["Periode", `${escapeHtml(s.start)} t/m ${escapeHtml(s.end)}`],
+        ["Status", s.ready ? "voldoende data voor prognose" : "te weinig data (min. 60 dagen)"],
+      ].map(([k, v]) => defItem(k, v)).join("");
+      $("#data-freshness").innerHTML = freshnessBanner(s);
     },
 
     renderMonthSelect() {
       const months = [...new Set(this.records.map((r) => r.date.slice(0, 7)))];
-      const sel = $("#table-month");
-      sel.innerHTML = months
-        .map((m) => `<option value="${m}">${monthLabel(m)}</option>`)
-        .join("");
-      sel.value = months[months.length - 1];
-      sel.onchange = () => this.renderTable();
+      fillSelect(
+        "table-month",
+        months.map((m) => [m, monthLabel(m)]),
+        months[months.length - 1],
+        () => this.renderTable()
+      );
     },
 
     renderTable() {
       const month = $("#table-month").value;
       const days = ["ma", "di", "wo", "do", "vr", "za", "zo"];
-      $("#data-table-body").innerHTML = this.records
+      const table = $("#data-table");
+      // De kopregel staat in de HTML en blijft staan; alleen de gegevensrijen
+      // worden vervangen.
+      for (const row of table.querySelectorAll("nldd-table-row:not([slot])")) row.remove();
+
+      const rows = this.records
         .filter((r) => r.date.startsWith(month))
         .map((r) => {
           const dow = days[(new Date(r.date).getDay() + 6) % 7];
-          const badge = r.holiday
-            ? `<span class="rvo-tag rvo-tag--pill rvo-tag--warning">${escapeHtml(r.holiday)}</span>`
-            : r.weekend ? `<span class="rvo-tag rvo-tag--pill">weekend</span>` : "";
-          return `<tr class="${r.weekend || r.holiday ? "kv-row--closed" : ""}">
-            <td class="rvo-table-cell">${r.date}</td>
-            <td class="rvo-table-cell">${dow}</td>
-            <td class="rvo-table-cell rvo-table-cell--numeric kv-num">${EUR2.format(r.cashflow)}</td>
-            <td class="rvo-table-cell">${badge}</td>
-          </tr>`;
+          const closed = r.weekend || r.holiday;
+          const tag = r.holiday
+            ? `<nldd-tag size="sm" color="warning" text="${escapeHtml(r.holiday)}"></nldd-tag>`
+            : r.weekend ? `<nldd-tag size="sm" text="weekend"></nldd-tag>` : "";
+          // Gesloten dagen krijgen secundaire tekstkleur én een tag: de kleur
+          // alleen zou de enige drager van de informatie zijn (WCAG 1.4.1).
+          const color = closed ? "secondary" : null;
+          return `<nldd-table-row>
+            ${cell(r.date, { color })}
+            ${cell(dow, { color, hideBelow: "md" })}
+            ${cell(EUR2.format(r.cashflow), { align: "right", color })}
+            <nldd-cell hide-below="md" width="full">${tag}</nldd-cell>
+          </nldd-table-row>`;
         })
         .join("");
+      table.insertAdjacentHTML("beforeend", rows);
     },
 
     alert(msg, isError) {
-      $("#upload-alert").innerHTML =
-        `<div class="rvo-alert rvo-alert--padding-sm ${isError ? "rvo-alert--error" : "rvo-alert--success"}">
-          <div class="rvo-alert__container">${escapeHtml(msg)}</div>
-        </div>`;
+      $("#upload-alert").innerHTML = banner(isError ? "critical" : "success", msg);
     },
   };
 
-  $("#upload-file").addEventListener("change", () => {
-    const file = $("#upload-file").files[0];
-    $("#upload-file-name").textContent = file ? file.name : "Geen bestand gekozen";
+  /* nldd-file-field verpakt een verborgen native input en meldt de keuze via
+     event.detail.files; de gekozen naam toont het component zelf. */
+  let uploadFile = null;
+  $("#upload-file").addEventListener("change", (evt) => {
+    const files = (evt.detail && evt.detail.files) || [];
+    uploadFile = files.length ? files[0] : null;
   });
 
   $("#upload-form").addEventListener("submit", async (evt) => {
     evt.preventDefault();
-    const file = $("#upload-file").files[0];
-    if (!file) return;
+    if (!uploadFile) {
+      dataScreen.alert("Kies eerst een CSV-bestand.", true);
+      return;
+    }
     const fd = new FormData();
-    fd.append("file", file);
+    fd.append("file", uploadFile);
     try {
       const s = await api("/api/upload", { method: "POST", body: fd });
       dataScreen.alert(`Geüpload: ${s.source} (${s.rows} dagen).`);
@@ -295,15 +377,20 @@
         // meer aan, dan verschijnt het menu zonder verdere aanpassing.
         const single = this.models.length <= 1;
         $("#model-select-wrapper").hidden = single;
-        $("#model-static").hidden = !single;
-        $("#model-label").setAttribute("for", single ? "model-static" : "model-select");
+        $("#model-static-wrapper").hidden = !single;
         if (single) {
           $("#model-static").textContent = this.models.length ? this.models[0].label : "–";
         } else {
-          $("#model-select").innerHTML = this.models
-            .map((m) => `<option value="${m.key}">${escapeHtml(m.label)}</option>`)
-            .join("");
-          $("#model-select").value = this.modelKey;
+          fillSelect(
+            "model-select",
+            this.models.map((m) => [m.key, m.label]),
+            this.modelKey,
+            (evt) => {
+              this.modelKey = evt.target.value;
+              this.renderModelDescription();
+              this.render();
+            }
+          );
         }
         this.modelsLoaded = true;
         this.renderModelDescription();
@@ -325,10 +412,9 @@
       if ($("#kpi-row").dataset.state !== "skeleton") {
         $("#kpi-row").dataset.state = "skeleton";
         $("#kpi-row").innerHTML = Array.from({ length: 3 }, () =>
-          `<div class="kv-kpi kv-kpi--skeleton" aria-hidden="true">
-            <p class="kv-kpi__label"><span class="kv-shimmer kv-shimmer--sm"></span></p>
-            <p class="kv-kpi__value"><span class="kv-shimmer kv-shimmer--lg"></span></p>
-          </div>`).join("");
+          card(`<nldd-activity-indicator size="24" timing="instant"
+                                         text="Kengetallen laden"></nldd-activity-indicator>`)
+        ).join("");
       }
     },
 
@@ -353,10 +439,7 @@
       } catch (err) {
         this.skeleton(false);
         $("#kpi-row").dataset.state = "error";
-        $("#kpi-row").innerHTML =
-          `<div class="rvo-alert rvo-alert--error rvo-alert--padding-sm">
-            <div class="rvo-alert__container">${escapeHtml(err.message)}</div>
-          </div>`;
+        $("#kpi-row").innerHTML = banner("critical", err.message);
         return;
       }
       this.skeleton(false);
@@ -399,7 +482,7 @@
       const totThis = totals((d) => inThis(d));
       const totNext = totals((d) => !inThis(d));
 
-      $("#graph-freshness").innerHTML = freshnessHtml(fc);
+      $("#graph-freshness").innerHTML = freshnessBanner(fc);
       // De totalen volgen het actieve scenario; dat moet op de tegel staan,
       // anders verandert het bedrag zonder dat het label meebeweegt. Een
       // bijstelling werkt alleen vóóruit, dus alleen de maand van de eerste
@@ -467,17 +550,18 @@
       this.render();
     },
 
-    /* ── Scenariotabs ─────────────────────────────────────── */
+    /* ── Scenariotabs ─────────────────────────────────────────
+       nldd-tab-bar regelt selectie, rollen en pijltjesnavigatie zelf; hier
+       staat alleen welke tabs er zijn. */
     renderScenarioTabs(paths) {
       $("#scenario-tabs").innerHTML = this.scenarios.map((s) => {
         const count = paths ? paths.get(s.id).count : 0;
         const isActive = s.id === this.activeId;
-        return `<button type="button" role="tab" class="kv-scenario-tab" data-id="${s.id}"
-                  aria-selected="${isActive}" tabindex="${isActive ? 0 : -1}">
-          <span class="kv-scenario-tab__dot" style="background:${s.color}"></span>
-          ${escapeHtml(s.name)}
-          <span class="kv-scenario-tab__count">${count}</span>
-        </button>`;
+        return `<nldd-tab-bar-item data-id="${escapeHtml(s.id)}"
+                  text="${escapeHtml(s.name)} (${count})" ${isActive ? "selected" : ""}>
+          <span slot="icon" class="kv-scenario-dot"
+                style="background:${escapeHtml(s.color)}"></span>
+        </nldd-tab-bar-item>`;
       }).join("");
 
       const nameInput = $("#scenario-name");
@@ -505,28 +589,32 @@
         .sort((a, b) => a.date.localeCompare(b.date));
 
       panel.hidden = false;
-      $("#adjust-list").innerHTML = entries.length
-        ? entries.map((e) => {
-            const shown = clamp(e.value, RATIO_MIN * e.base, RATIO_MAX * e.base);
-            const pct = e.base ? ((shown - e.base) / e.base) * 100 : 0;
-            const dir = pct >= 0 ? "up" : "down";
-            return `<li class="kv-adjust-item">
-              <span class="kv-adjust-item__date">${shortDate(e.date)}</span>
-              <span class="kv-adjust-item__values">
-                <span class="kv-adjust-item__base">${fmtMoney(e.base)}</span>
-                <span aria-hidden="true">→</span>
-                <strong>${fmtMoney(shown)}</strong>
-                <span class="kv-adjust-item__pct kv-adjust-item__pct--${dir}">${fmtPct(pct)}</span>
-              </span>
-              <span class="kv-adjust-item__actions">
-                <button type="button" class="kv-linkbutton" data-edit="${e.date}">Wijzigen</button>
-                <button type="button" class="kv-linkbutton kv-linkbutton--danger" data-remove="${e.date}"
-                        aria-label="Bijstelling van ${dateLabel(e.date)} verwijderen">Verwijderen</button>
-              </span>
-            </li>`;
-          }).join("")
-        : `<li class="kv-adjust-empty">Nog geen bijstellingen in dit scenario.
-             Klik een prognosepunt aan om er een toe te voegen.</li>`;
+      // Leeg: nldd-list toont zijn eigen empty-state uit empty-text.
+      $("#adjust-list").innerHTML = entries.map((e) => {
+        const shown = clamp(e.value, RATIO_MIN * e.base, RATIO_MAX * e.base);
+        const pct = e.base ? ((shown - e.base) / e.base) * 100 : 0;
+        return `<nldd-list-item size="sm">
+          ${cell(shortDate(e.date), { width: "5rem" })}
+          <nldd-cell width="full">
+            <span class="kv-adjust-values">
+              <nldd-text size="sm" color="secondary" class="kv-adjust-base">${fmtMoney(e.base)}</nldd-text>
+              <nldd-text size="sm" aria-hidden="true">→</nldd-text>
+              <nldd-text size="sm" weight="bold">${fmtMoney(shown)}</nldd-text>
+            </span>
+          </nldd-cell>
+          ${cell(fmtPct(pct), { align: "right", width: "5rem", color: pct >= 0 ? "success" : "critical" })}
+          <nldd-cell>
+            <span class="kv-adjust-actions">
+            <nldd-button variant="neutral-transparent" size="xs" data-edit="${escapeHtml(e.date)}"
+                         text="Wijzigen"
+                         accessible-label="Bijstelling van ${escapeHtml(dateLabel(e.date))} wijzigen"></nldd-button>
+            <nldd-button variant="critical-transparent" size="xs" data-remove="${escapeHtml(e.date)}"
+                         text="Verwijderen"
+                         accessible-label="Bijstelling van ${escapeHtml(dateLabel(e.date))} verwijderen"></nldd-button>
+            </span>
+          </nldd-cell>
+        </nldd-list-item>`;
+      }).join("");
 
       const n = entries.length;
       const clampNote = this.clampedCount
@@ -554,25 +642,48 @@
         `Modelprognose: <strong>${fmtMoney(day.pred)}</strong><br>
          Toegestaan: ${fmtMoney(RATIO_MIN * day.pred)} – ${fmtMoney(RATIO_MAX * day.pred)}`;
       const input = $("#editor-value");
-      input.min = (RATIO_MIN * day.pred).toFixed(2);
-      input.max = (RATIO_MAX * day.pred).toFixed(2);
+      input.min = Math.round(RATIO_MIN * day.pred * 100) / 100;
+      input.max = Math.round(RATIO_MAX * day.pred * 100) / 100;
       // Stap fijn genoeg om centen te kunnen zetten, ook bij grote bedragen.
-      input.step = "0.01";
-      input.value = (Math.round(current * 100) / 100).toFixed(2);
+      input.step = 0.01;
+      input.value = Math.round(current * 100) / 100;
       $("#editor-remove").hidden = s.adjustments[date] == null;
 
       $("#point-editor").hidden = false;
       this.updateEditorDelta();
       this.positionEditor();
-      input.focus();
-      input.select();
+      this.focusEditorInput();
+    },
+
+    /* Ontsnappingsluik: de native input van nldd-number-field zit in de shadow
+       DOM en er is geen focus()-API. Defensief zoeken, met een terugval als de
+       interne structuur verandert. */
+    focusEditorInput() {
+      const field = $("#editor-value");
+      const native =
+        (field.shadowRoot && field.shadowRoot.querySelector("input")) ||
+        field.querySelector("input");
+      if (!native) { field.focus(); return; }
+      native.focus();
+      native.select();
+    },
+
+    editorValue() {
+      const field = $("#editor-value");
+      const native =
+        (field.shadowRoot && field.shadowRoot.querySelector("input")) ||
+        field.querySelector("input");
+      // Tijdens het typen staat de tussenstand in de native input; het
+      // component commit pas bij blur of Enter.
+      const raw = native ? native.value : field.value;
+      return parseFloat(raw);
     },
 
     updateEditorDelta() {
       const fc = this.lastForecast;
       const day = fc && fc.days.find((d) => d.date === this.editorDate);
       if (!day) return;
-      const value = parseFloat($("#editor-value").value);
+      const value = this.editorValue();
       const el = $("#editor-delta");
       if (!isFinite(value)) { el.textContent = ""; return; }
       const pct = day.pred ? ((value - day.pred) / day.pred) * 100 : 0;
@@ -580,7 +691,7 @@
       el.textContent = outside
         ? `${fmtPct(pct)} — buiten bereik, wordt begrensd`
         : `${fmtPct(pct)} t.o.v. de modelprognose`;
-      el.classList.toggle("is-warning", outside);
+      el.setAttribute("color", outside ? "warning" : "secondary");
     },
 
     positionEditor() {
@@ -611,7 +722,7 @@
     },
 
     applyEditor() {
-      const value = parseFloat($("#editor-value").value);
+      const value = this.editorValue();
       if (!isFinite(value) || value < 0) return;
       const date = this.editorDate;
       this.closeEditor();
@@ -668,7 +779,7 @@
       // Een band van 80% hoort ~80% van de dagen te bevatten. Te laag betekent
       // overmoedig, te hoog betekent nutteloos breed. Beide zijn geen succes.
       const off = cov - target;
-      const state = Math.abs(off) <= 2 ? "ok" : "warn";
+      const state = Math.abs(off) <= 2 ? "success" : "warning";
       const covNote = Math.abs(off) <= 2
         ? "goed gekalibreerd"
         : off < 0 ? "band te smal — model is overmoedig" : "band te breed — weinig informatief";
@@ -680,15 +791,12 @@
           : []),
         { label: `Binnen band (doel: ${target}%)`, value: `${cov}%`, note: covNote, state },
       ];
-      $("#kpi-row").innerHTML = kpis
-        .map(
-          (k) => `<div class="kv-kpi ${k.state ? `kv-kpi--${k.state}` : ""}">
-            <p class="kv-kpi__label">${k.label}</p>
-            <p class="kv-kpi__value">${k.value}</p>
-            ${k.note ? `<p class="kv-kpi__note">${escapeHtml(k.note)}</p>` : ""}
-          </div>`
-        )
-        .join("");
+      $("#kpi-row").innerHTML = kpis.map((k) => card(`
+        <nldd-text size="sm" color="secondary">${escapeHtml(k.label)}</nldd-text>
+        <nldd-text size="lg" weight="bold" class="kv-kpi__value">${escapeHtml(k.value)}</nldd-text>
+        ${k.note
+          ? `<nldd-text size="xs" color="${k.state || "secondary"}">${escapeHtml(k.note)}</nldd-text>`
+          : ""}`, 4)).join("");
     },
 
     renderTotals(fc, show, t) {
@@ -696,26 +804,31 @@
       panel.hidden = !show;
       if (!show) return;
       const pct = (now, then) => (then ? fmtPct(((now - then) / then) * 100) : "–");
-      const row = (label, now, then) => `
-        <tr><td>${label}</td>
-          <td>${fmtMoney0(now)}</td>
-          <td>${fmtMoney0(then)}</td>
-          <td>${pct(now, then)}</td></tr>`;
+      const row = (label, now, then) => `<nldd-table-row>
+        ${cell(label)}
+        ${cell(fmtMoney0(now), { align: "right" })}
+        ${cell(fmtMoney0(then), { align: "right" })}
+        ${cell(pct(now, then), { align: "right" })}
+      </nldd-table-row>`;
       const lag = fc.lastYearLagDays || 364;
-      panel.innerHTML = `
-        <h2 class="utrecht-heading-3">Totale volumes t.o.v. vorig jaar</h2>
-        <table>
-          <thead><tr><th>Periode</th><th>Verwacht/gerealiseerd</th>
-            <th>Vorig jaar</th><th>Verschil</th></tr></thead>
-          <tbody>
-            ${row(monthLabel(fc.thisMonth), t.totThis, t.lyThis)}
-            ${row("volgende maand", t.totNext, t.lyNext)}
-          </tbody>
-        </table>
-        <p class="kv-hint">
+      panel.innerHTML = `<nldd-container padding="24" gap="16">
+        ${heading(2, 3, "Totale volumes t.o.v. vorig jaar")}
+        <nldd-table accessible-label="Totale volumes ten opzichte van vorig jaar"
+                    columns="minmax(140px, 1fr) minmax(150px, 1fr) minmax(140px, 1fr) 110px">
+          <nldd-table-row slot="header">
+            ${cell("Periode")}
+            ${cell("Verwacht/gerealiseerd", { align: "right" })}
+            ${cell("Vorig jaar", { align: "right" })}
+            ${cell("Verschil", { align: "right" })}
+          </nldd-table-row>
+          ${row(monthLabel(fc.thisMonth), t.totThis, t.lyThis)}
+          ${row("volgende maand", t.totNext, t.lyNext)}
+        </nldd-table>
+        <nldd-text size="sm" color="secondary">
           "Vorig jaar" is de periode van ${lag} dagen (${Math.round(lag / 7)} weken) eerder, zodat
           de weekdagen gelijk lopen en beide periodes evenveel werk- en weekenddagen bevatten.
-        </p>`;
+        </nldd-text>
+      </nldd-container>`;
     },
 
     /* De legenda volgt wat er daadwerkelijk getekend is; anders staat er een
@@ -747,23 +860,24 @@
     async show() {
       const key = graphScreen.modelKey || "gbr";
       if (this.loadedFor === key) return;
-      $("#model-card").innerHTML = `<div class="kv-card"><p class="kv-hint">Modelkaart laden…</p></div>`;
+      $("#model-card").innerHTML = card(
+        `<nldd-activity-indicator size="24" timing="instant"
+                                  text="Modelkaart laden" show-text></nldd-activity-indicator>`);
       try {
-        const card = await api(`/api/modelcard?model=${key}`);
+        const modelcard = await api(`/api/modelcard?model=${key}`);
         this.loadedFor = key;
-        this.render(card);
+        this.render(modelcard);
       } catch (err) {
-        $("#model-card").innerHTML =
-          `<div class="rvo-alert rvo-alert--error rvo-alert--padding-sm">
-            <div class="rvo-alert__container">${escapeHtml(err.message)}</div>
-          </div>`;
+        $("#model-card").innerHTML = banner("critical", err.message);
       }
     },
 
     render(c) {
       $("#model-card").innerHTML = [
         this.header(c),
-        `<div class="kv-columns">${this.purpose(c)}${this.limits(c)}</div>`,
+        `<nldd-container layout="grid" column-count="2" sm-column-count="1" gap="24">
+           ${this.purpose(c)}${this.limits(c)}
+         </nldd-container>`,
         this.howItWorks(c),
         this.trainingData(c),
         this.performance(c),
@@ -772,201 +886,184 @@
     },
 
     header(c) {
-      return `<div class="kv-card kv-modelcard__header">
-        <div class="kv-modelcard__title">
-          <h1 class="utrecht-heading-2">${escapeHtml(c.label)}</h1>
-          <span class="rvo-tag rvo-tag--pill kv-version">versie ${escapeHtml(c.version)}</span>
-          <span class="rvo-tag rvo-tag--pill rvo-tag--warning">${escapeHtml(c.status)}</span>
-          ${c.available ? "" : `<span class="rvo-tag rvo-tag--pill">niet actief</span>`}
-        </div>
-        <p class="utrecht-paragraph">${escapeHtml(c.description)}</p>
-        <dl class="kv-deflist">
-          <dt>Eigenaar</dt><dd>${escapeHtml(c.owner)}</dd>
-          <dt>Contact</dt><dd><a class="rvo-link" href="mailto:${escapeHtml(c.contact)}">${escapeHtml(c.contact)}</a></dd>
-          <dt>Laatst gewijzigd</dt><dd>${c.updated ? dateLabel(c.updated) : "–"}</dd>
-          <dt>Kaart opgemaakt</dt><dd>${dateLabel(c.generatedOn)}</dd>
-        </dl>
-      </div>`;
+      return card(`
+        <nldd-title size="2">
+          <h1>${escapeHtml(c.label)}</h1>
+          <span slot="end" class="kv-modelcard__title">
+            <nldd-tag color="accent" text="versie ${escapeHtml(c.version)}"></nldd-tag>
+            <nldd-tag color="warning" text="${escapeHtml(c.status)}"></nldd-tag>
+            ${c.available ? "" : `<nldd-tag text="niet actief"></nldd-tag>`}
+          </span>
+        </nldd-title>
+        <nldd-text>${escapeHtml(c.description)}</nldd-text>
+        ${defList([
+          ["Eigenaar", escapeHtml(c.owner)],
+          ["Contact", `<nldd-link size="sm" href="mailto:${escapeHtml(c.contact)}"
+                                  text="${escapeHtml(c.contact)}"></nldd-link>`],
+          ["Laatst gewijzigd", c.updated ? escapeHtml(dateLabel(c.updated)) : "–"],
+          ["Kaart opgemaakt", escapeHtml(dateLabel(c.generatedOn))],
+        ], "Herkomst van het model")}`);
     },
 
     purpose(c) {
       const p = c.purpose;
-      return `<div class="kv-card">
-        <h2 class="utrecht-heading-3">Doel en toepassing</h2>
-        <dl class="kv-deflist kv-deflist--stacked">
-          <dt>Waarvoor</dt><dd>${escapeHtml(p.goal)}</dd>
-          <dt>Voor wie</dt><dd>${escapeHtml(p.users)}</dd>
-          <dt>Rol in besluiten</dt><dd>${escapeHtml(p.decision)}</dd>
-        </dl>
-        <h3 class="utrecht-heading-4">Niet bedoeld voor</h3>
-        <ul class="kv-list">${p.not_for.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>
-      </div>`;
+      return card(`
+        ${heading(2, 3, "Doel en toepassing")}
+        ${richText(`
+          <dl>
+            <dt>Waarvoor</dt><dd>${escapeHtml(p.goal)}</dd>
+            <dt>Voor wie</dt><dd>${escapeHtml(p.users)}</dd>
+            <dt>Rol in besluiten</dt><dd>${escapeHtml(p.decision)}</dd>
+          </dl>
+          <h3>Niet bedoeld voor</h3>
+          <ul>${p.not_for.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>`)}`);
     },
 
     limits(c) {
-      return `<div class="kv-card">
-        <h2 class="utrecht-heading-3">Beperkingen en risico's</h2>
-        <ul class="kv-list">${c.limitations.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>
-      </div>`;
+      return card(`
+        ${heading(2, 3, "Beperkingen en risico's")}
+        ${richText(`<ul>${c.limitations.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>`)}`);
     },
 
     howItWorks(c) {
       const h = c.howItWorks;
       const band = Math.round((h.quantiles[1] - h.quantiles[0]) * 100);
-      return `<div class="kv-card">
-        <h2 class="utrecht-heading-3">Hoe het werkt</h2>
-        <p class="utrecht-paragraph">
+      return card(`
+        ${heading(2, 3, "Hoe het werkt")}
+        ${richText(`<p>
           Het model leert uit de eigen historie hoe de ontvangsten samenhangen met de kalender.
           Er worden drie modellen getraind — voor het midden en voor de onder- en bovengrens —
-          samen de ${band}%-onzekerheidsband.
-        </p>
+          samen de ${band}%-onzekerheidsband.</p>`)}
 
-        <h3 class="utrecht-heading-4">Instellingen</h3>
-        <dl class="kv-deflist">
-          ${h.hyperparameters.map((p) =>
-            `<dt>${escapeHtml(p.name)}</dt><dd>${escapeHtml(p.value)}</dd>`).join("")}
-        </dl>
+        ${heading(3, 4, "Instellingen")}
+        ${defList(h.hyperparameters.map((p) => [p.name, escapeHtml(p.value)]), "Instellingen van het model")}
 
-        <h3 class="utrecht-heading-4">Kenmerken die het model gebruikt</h3>
-        <!-- tabindex: op smalle schermen scrollt deze tabel, en een scrollbare
-             regio moet ook met het toetsenbord te bedienen zijn. -->
-        <div class="kv-table-scroll" tabindex="0" role="region"
-             aria-label="Kenmerken die het model gebruikt">
-          <table class="rvo-table">
-            <thead><tr class="rvo-table-row">
-              <th scope="col" class="rvo-table-header">Kenmerk</th>
-              <th scope="col" class="rvo-table-header">Betekenis</th>
-              <th scope="col" class="rvo-table-header">Waarom</th>
-            </tr></thead>
-            <tbody>
-              ${h.features.map((f) => `<tr class="rvo-table-row">
-                <td class="rvo-table-cell"><code>${escapeHtml(f.name)}</code></td>
-                <td class="rvo-table-cell">${escapeHtml(f.label)}</td>
-                <td class="rvo-table-cell">${escapeHtml(f.why)}</td>
-              </tr>`).join("")}
-            </tbody>
-          </table>
-        </div>
-        <p class="kv-hint">
+        ${heading(3, 4, "Kenmerken die het model gebruikt")}
+        <!-- nldd-table is zijn eigen scroll-container: onder de minimale
+             kolombreedtes scrollt hij horizontaal in plaats van de
+             kenmerknamen middenin af te breken ("is_weeke nd"). -->
+        <nldd-table accessible-label="Kenmerken die het model gebruikt"
+                    columns="minmax(180px, 1fr) minmax(200px, 1fr) minmax(260px, 2fr)">
+          <nldd-table-row slot="header">
+            ${cell("Kenmerk")}${cell("Betekenis")}${cell("Waarom")}
+          </nldd-table-row>
+          ${h.features.map((f) => `<nldd-table-row>
+            <nldd-cell width="full"><code>${escapeHtml(f.name)}</code></nldd-cell>
+            ${cell(f.label)}
+            ${cell(f.why)}
+          </nldd-table-row>`).join("")}
+        </nldd-table>
+        <nldd-text size="sm" color="secondary">
           Het model gebruikt geen gegevens over personen of organisaties — alleen de kalender
           en de eigen historische reeks.
-        </p>
+        </nldd-text>
 
-        <h3 class="utrecht-heading-4">Nabewerking</h3>
-        <ul class="kv-list">${h.postprocessing.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>
+        ${heading(3, 4, "Nabewerking")}
+        ${richText(`<ul>${h.postprocessing.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>`)}
 
-        <h3 class="utrecht-heading-4">Vergelijking met vorig jaar</h3>
-        <p class="utrecht-paragraph">${escapeHtml(h.comparison || "")}</p>
-      </div>`;
+        ${heading(3, 4, "Vergelijking met vorig jaar")}
+        <nldd-text>${escapeHtml(h.comparison || "")}</nldd-text>`);
     },
 
     trainingData(c) {
       const t = c.trainingData;
       if (!t.available) {
-        return `<div class="kv-card"><h2 class="utrecht-heading-3">Trainingsdata</h2>
-          <p class="utrecht-paragraph">Geen dataset geladen.</p></div>`;
+        return card(`${heading(2, 3, "Trainingsdata")}
+          <nldd-text>Geen dataset geladen.</nldd-text>`);
       }
       // Nul op een gewone werkdag kan een aangevulde ontbrekende dag zijn.
       const suspect = t.zeroOnOpenDays > 0
-        ? `<div class="rvo-alert rvo-alert--info rvo-alert--padding-sm kv-alert">
-             <div class="rvo-alert__container">
-               ${t.zeroOnOpenDays} werkdag${t.zeroOnOpenDays > 1 ? "en hebben" : " heeft"} een bedrag van
-               € 0. Dat kan een echte nuldag zijn, maar ook een dag die in het bronbestand
-               ontbrak en met nul is aangevuld.
-             </div>
-           </div>`
+        ? banner("accent",
+            `${t.zeroOnOpenDays} werkdag${t.zeroOnOpenDays > 1 ? "en hebben" : " heeft"} een bedrag van € 0.`,
+            richText(`<p>Dat kan een echte nuldag zijn, maar ook een dag die in het
+              bronbestand ontbrak en met nul is aangevuld.</p>`, "flat"))
         : "";
-      return `<div class="kv-card">
-        <h2 class="utrecht-heading-3">Trainingsdata</h2>
-        <dl class="kv-deflist">
-          <dt>Bron</dt><dd>${escapeHtml(t.source)}</dd>
-          <dt>Periode</dt><dd>${dateLabel(t.start)} t/m ${dateLabel(t.end)}</dd>
-          <dt>Aantal dagen</dt><dd>${t.days}</dd>
-          <dt>Waarvan weekend</dt><dd>${t.weekendDays}</dd>
-          <dt>Waarvan feestdag</dt><dd>${t.holidayDays}</dd>
-          <dt>Dagen met € 0</dt><dd>${t.zeroDays}</dd>
-          <dt>Gemiddelde per dag</dt><dd>${fmtMoney(t.mean)}</dd>
-          <dt>Mediaan per dag</dt><dd>${fmtMoney(t.median)}</dd>
-          <dt>Hoogste dag</dt><dd>${fmtMoney(t.max)}</dd>
-          <dt>Traint op</dt><dd>${escapeHtml(t.trainedOn)}</dd>
-          <dt>Datavingerafdruk</dt><dd><code class="kv-fingerprint">${escapeHtml(t.fingerprint)}</code></dd>
-        </dl>
+      return card(`
+        ${heading(2, 3, "Trainingsdata")}
+        ${defList([
+          ["Bron", escapeHtml(t.source)],
+          ["Periode", `${escapeHtml(dateLabel(t.start))} t/m ${escapeHtml(dateLabel(t.end))}`],
+          ["Aantal dagen", String(t.days)],
+          ["Waarvan weekend", String(t.weekendDays)],
+          ["Waarvan feestdag", String(t.holidayDays)],
+          ["Dagen met € 0", String(t.zeroDays)],
+          ["Gemiddelde per dag", fmtMoney(t.mean)],
+          ["Mediaan per dag", fmtMoney(t.median)],
+          ["Hoogste dag", fmtMoney(t.max)],
+          ["Traint op", escapeHtml(t.trainedOn)],
+          ["Datavingerafdruk", `<code class="kv-fingerprint">${escapeHtml(t.fingerprint)}</code>`],
+        ], "Kenmerken van de trainingsdata")}
         ${suspect}
-        <p class="kv-hint">
+        <nldd-text size="sm" color="secondary">
           De vingerafdruk is een hash over alle datums en bedragen. Samen met de modelversie
           legt hij vast welke prognose uit welke gegevens is ontstaan; beide staan ook in de
           export.
-        </p>
-      </div>`;
+        </nldd-text>`);
     },
 
     performance(c) {
       const m = c.performance;
       if (!m) {
-        return `<div class="kv-card"><h2 class="utrecht-heading-3">Prestaties</h2>
-          <p class="utrecht-paragraph">Nog geen backtest beschikbaar — er is te weinig data
-          voor een prognose.</p></div>`;
+        return card(`${heading(2, 3, "Prestaties")}
+          <nldd-text>Nog geen backtest beschikbaar — er is te weinig data voor een
+          prognose.</nldd-text>`);
       }
       const off = m.coverage_pct - m.coverage_target;
       const ok = Math.abs(off) <= 2;
       const note = ok ? "goed gekalibreerd"
         : off < 0 ? "band te smal — het model is overmoedig"
         : "band te breed — weinig informatief";
-      return `<div class="kv-card">
-        <h2 class="utrecht-heading-3">Prestaties</h2>
-        <p class="utrecht-paragraph">
+      const tile = (label, value, hint, state) => card(`
+        <nldd-text size="sm" color="secondary">${escapeHtml(label)}</nldd-text>
+        <nldd-text size="lg" weight="bold" class="kv-kpi__value">${escapeHtml(value)}</nldd-text>
+        <nldd-text size="xs" color="${state || "secondary"}">${escapeHtml(hint)}</nldd-text>`, 4);
+      return card(`
+        ${heading(2, 3, "Prestaties")}
+        <nldd-text>
           Gemeten met een backtest: het model wordt getraind zonder de laatste
           ${c.howItWorks.backtestDays} dagen en moet die vervolgens voorspellen.
-        </p>
+        </nldd-text>
         <div class="kv-kpi-row">
-          <div class="kv-kpi kv-kpi--${ok ? "ok" : "warn"}">
-            <p class="kv-kpi__label">Binnen band (doel: ${m.coverage_target}%)</p>
-            <p class="kv-kpi__value">${m.coverage_pct}%</p>
-            <p class="kv-kpi__note">${note}</p>
-          </div>
-          <div class="kv-kpi">
-            <p class="kv-kpi__label">Pinball-loss</p>
-            <p class="kv-kpi__value">${m.pinball}</p>
-            <p class="kv-kpi__note">lager is beter; alleen vergelijkbaar binnen dezelfde dataset</p>
-          </div>
+          ${tile(`Binnen band (doel: ${m.coverage_target}%)`, `${m.coverage_pct}%`, note,
+                 ok ? "success" : "warning")}
+          ${tile("Pinball-loss", String(m.pinball),
+                 "lager is beter; alleen vergelijkbaar binnen dezelfde dataset")}
         </div>
-        <p class="kv-hint">
+        <nldd-text size="sm" color="secondary">
           "Binnen band" is het aandeel dagen waarop de werkelijke ontvangst tussen de onder- en
           bovengrens viel. Bij een ${m.coverage_target}%-band hoort dat rond de
           ${m.coverage_target}% te liggen: lager betekent dat het model zichzelf te zeker
           inschat, hoger dat de band zo ruim is dat hij weinig zegt.
-        </p>
-      </div>`;
+        </nldd-text>`);
     },
 
     changelog(c) {
-      return `<div class="kv-card">
-        <h2 class="utrecht-heading-3">Versiegeschiedenis</h2>
+      return card(`
+        ${heading(2, 3, "Versiegeschiedenis")}
         <ol class="kv-changelog">
           ${c.changelog.map((e, i) => `<li class="kv-changelog__item">
             <div class="kv-changelog__head">
-              <span class="rvo-tag rvo-tag--pill ${i === 0 ? "kv-version" : ""}">${escapeHtml(e.version)}</span>
-              <span class="kv-changelog__date">${dateLabel(e.date)}</span>
-              ${i === 0 ? `<span class="kv-changelog__current">huidige versie</span>` : ""}
+              <nldd-tag color="${i === 0 ? "accent" : "neutral"}"
+                        text="${escapeHtml(e.version)}"></nldd-tag>
+              <nldd-text size="sm" color="secondary">${escapeHtml(dateLabel(e.date))}</nldd-text>
+              ${i === 0 ? `<nldd-text size="xs" color="accent" weight="medium">huidige versie</nldd-text>` : ""}
               ${e.commit ? `<code class="kv-fingerprint">${escapeHtml(e.commit)}</code>` : ""}
             </div>
-            <ul class="kv-list">${e.changes.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>
+            ${richText(`<ul>${e.changes.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>`)}
           </li>`).join("")}
         </ol>
-        <p class="kv-hint">
+        <nldd-text size="sm" color="secondary">
           Elke wijziging die de uitkomst kan veranderen — kenmerken, instellingen of
           nabewerking — krijgt een nieuwe versie.
-        </p>
-      </div>`;
+        </nldd-text>`);
     },
   };
 
   /* ── Bediening ─────────────────────────────────────────── */
-  $("#model-select").addEventListener("change", (evt) => {
-    graphScreen.modelKey = evt.target.value;
-    graphScreen.renderModelDescription();
-    graphScreen.render();
-  });
+  // Het modelkeuzemenu krijgt zijn listener in fillSelect: het <select> wordt
+  // bij het vullen vervangen, dus een listener van tevoren zou meeverdwijnen.
+  // nldd-switch-field meldt de nieuwe stand in event.detail.checked; de
+  // eigenschap op het element is dan al bijgewerkt.
   for (const id of ["#toggle-next-month", "#toggle-last-year", "#toggle-totals"]) {
     $(id).addEventListener("change", () => graphScreen.render());
   }
@@ -1000,31 +1097,21 @@
     graphScreen.render();
   });
 
-  $("#scenario-tabs").addEventListener("click", (evt) => {
-    const btn = evt.target.closest("[data-id]");
-    if (!btn) return;
-    graphScreen.activeId = btn.dataset.id;
+  // nldd-tab-bar regelt de selectie en de pijltjesnavigatie; hier alleen wat
+  // er daarna moet gebeuren.
+  $("#scenario-tabs").addEventListener("tabchange", (evt) => {
+    const item = evt.detail && evt.detail.item;
+    if (!item || !item.dataset.id) return;
+    graphScreen.activeId = item.dataset.id;
     graphScreen.closeEditor();
     graphScreen.render();
-  });
-
-  // Pijltjesnavigatie tussen scenariotabs, zoals een echte tablist.
-  $("#scenario-tabs").addEventListener("keydown", (evt) => {
-    if (evt.key !== "ArrowRight" && evt.key !== "ArrowLeft") return;
-    const ids = graphScreen.scenarios.map((s) => s.id);
-    const at = ids.indexOf(graphScreen.activeId);
-    const next = ids[(at + (evt.key === "ArrowRight" ? 1 : ids.length - 1)) % ids.length];
-    evt.preventDefault();
-    graphScreen.activeId = next;
-    graphScreen.render();
-    const tab = $(`#scenario-tabs [data-id="${next}"]`);
-    if (tab) tab.focus();
   });
 
   $("#scenario-name").addEventListener("input", (evt) => {
     const s = graphScreen.active();
     if (!s) return;
-    s.name = evt.target.value.slice(0, 60);
+    const value = (evt.detail && evt.detail.value) ?? evt.target.value;
+    s.name = String(value).slice(0, 60);
     graphScreen.renderScenarioTabs(null);
   });
   // Tabtellers kloppen weer zodra het veld verlaten wordt.
@@ -1039,10 +1126,6 @@
 
   /* Exacte invoer */
   $("#editor-value").addEventListener("input", () => graphScreen.updateEditorDelta());
-  $("#editor-value").addEventListener("keydown", (evt) => {
-    if (evt.key === "Enter") { evt.preventDefault(); graphScreen.applyEditor(); }
-    if (evt.key === "Escape") { evt.preventDefault(); graphScreen.closeEditor(true); }
-  });
   $("#editor-apply").addEventListener("click", () => graphScreen.applyEditor());
   $("#editor-cancel").addEventListener("click", () => graphScreen.closeEditor(true));
   $("#editor-remove").addEventListener("click", () => {
@@ -1050,18 +1133,21 @@
     graphScreen.closeEditor();
     graphScreen.removeAdjustment(date);
   });
+  // keydown is composed, dus toetsen in het invoerveld bereiken het paneel ook
+  // vanuit de shadow DOM van nldd-number-field.
   $("#point-editor").addEventListener("keydown", (evt) => {
+    if (evt.key === "Enter") { evt.preventDefault(); graphScreen.applyEditor(); }
     if (evt.key === "Escape") { evt.preventDefault(); graphScreen.closeEditor(true); }
   });
-  for (const btn of document.querySelectorAll(".kv-editor__quick button")) {
+  for (const btn of document.querySelectorAll(".kv-editor__quick nldd-button[data-pct]")) {
     btn.addEventListener("click", () => {
-      const input = $("#editor-value");
+      const field = $("#editor-value");
       const pct = +btn.dataset.pct;
-      const base = parseFloat(input.value);
+      const base = graphScreen.editorValue();
       if (!isFinite(base)) return;
-      input.value = (Math.round(base * (1 + pct / 100) * 100) / 100).toFixed(2);
+      field.value = Math.round(base * (1 + pct / 100) * 100) / 100;
       graphScreen.updateEditorDelta();
-      input.focus();
+      graphScreen.focusEditorInput();
     });
   }
 
@@ -1072,46 +1158,6 @@
       graphScreen.focusDate = evt.target.dataset.date;
     }
   });
-
-  /* Toelichting bij "Realisatie vorig jaar". Voldoet aan WCAG 1.4.13: te sluiten
-     met Escape, de muis kan er overheen zonder dat hij verdwijnt, en hij blijft
-     staan tot je hem sluit. */
-  (function initInfo() {
-    const btn = $("#last-year-info"), help = $("#last-year-help");
-    let pinned = false, hideTimer = null;
-
-    const show = () => {
-      clearTimeout(hideTimer);
-      help.dataset.collapsed = "false";
-      btn.setAttribute("aria-expanded", "true");
-    };
-    const hide = (force) => {
-      if (pinned && !force) return;
-      clearTimeout(hideTimer);
-      // Korte vertraging zodat de muis van de knop naar de tekst kan bewegen.
-      hideTimer = setTimeout(() => {
-        help.dataset.collapsed = "true";
-        btn.setAttribute("aria-expanded", "false");
-      }, 150);
-    };
-
-    btn.addEventListener("pointerenter", show);
-    btn.addEventListener("focus", show);
-    btn.addEventListener("pointerleave", () => hide());
-    btn.addEventListener("blur", () => hide());
-    help.addEventListener("pointerenter", () => clearTimeout(hideTimer));
-    help.addEventListener("pointerleave", () => hide());
-    btn.addEventListener("click", () => {
-      pinned = !pinned;
-      if (pinned) show(); else hide(true);
-    });
-    document.addEventListener("keydown", (evt) => {
-      if (evt.key !== "Escape" || help.dataset.collapsed === "true") return;
-      pinned = false;
-      hide(true);
-      btn.focus();
-    });
-  })();
 
   $("#btn-export-csv").addEventListener("click", () => graphScreen.exportAs("csv"));
   $("#btn-export-xlsx").addEventListener("click", () => graphScreen.exportAs("xlsx"));

@@ -1,0 +1,22 @@
+{
+  "name": "kasvisie",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Frontend van KasVisie: platte HTML/JS met de web components van het NLDD Design System, gebundeld met Vite.",
+  "license": "EUPL-1.2",
+  "dependencies": {
+    "@nldd/design-system": "0.8.83"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^8.2.2"
+  }
+}

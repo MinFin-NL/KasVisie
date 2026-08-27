@@ -3,7 +3,7 @@
    prognosestartlijn en scenariolijnen. Prognosepunten zijn te bedienen met de
    muis (slepen = grof, klikken = exacte invoer) en met het toetsenbord. */
 
-(function () {
+const KVChart = (function () {
   "use strict";
 
   const NS = "http://www.w3.org/2000/svg";
@@ -15,6 +15,11 @@
   // Verplaatsing waaronder een muisactie als klik geldt in plaats van als sleep.
   const CLICK_SLOP_PX = 4;
 
+  /* Startwaarden; de reekskleuren en de grafiekchroom worden bij elke
+     tekening overschreven met de waarden uit style.css. De reeksen komen uit
+     een gevalideerd categorisch palet (kleurenblind-veilig) en staan bewust
+     buiten de huisstijl; de chroom komt uit de NLDD-semantics en beweegt dus
+     mee met het licht/donker-schema. */
   const COLORS = {
     actual: "#2f6cb3",
     pred: "#d52b1e",
@@ -23,10 +28,32 @@
     holiday: "rgba(255, 182, 18, 0.18)",
     thisMonth: "rgba(47, 108, 179, 0.05)",
     nextMonth: "rgba(224, 121, 38, 0.06)",
+    nextMonthLabel: "#c25e1e",
     grid: "#e3e7e9",
     axis: "#5f5e5c",
     focus: "#1b1b1b",
+    surface: "#fff",
   };
+
+  /* SVG-presentatieattributen accepteren geen var(), dus de waarden worden
+     hier één keer per tekening uit de CSS gelezen. */
+  const CSS_COLORS = {
+    actual: "--kv-series-actual",
+    pred: "--kv-series-pred",
+    lastYear: "--kv-series-lastyear",
+    grid: "--kv-chart-grid",
+    axis: "--kv-chart-axis",
+    focus: "--kv-chart-focus",
+    surface: "--kv-chart-surface",
+  };
+
+  function readColors(node) {
+    const style = getComputedStyle(node);
+    for (const [key, prop] of Object.entries(CSS_COLORS)) {
+      const value = style.getPropertyValue(prop).trim();
+      if (value) COLORS[key] = value;
+    }
+  }
 
   const SERIES = [
     { key: "lastYearActual", label: "Werkelijk vorig jaar", color: COLORS.lastYear, dash: "2 4", width: 2, swatch: "dotted" },
@@ -60,7 +87,8 @@
   // opts: {forecastStart, thisMonth, tooltipEl, dragFloor, focusDate,
   //        scenarios: [{id, name, color, active, values: []}],
   //        fmtMoney, fmtAxis, onAdjust(date, value), onOpenEditor(date)}
-  window.KVChart = function render(svg, days, opts) {
+  function render(svg, days, opts) {
+    readColors(svg);
     svg.innerHTML = "";
     const n = days.length;
     if (!n) return { series: [], scenarios: [] };
@@ -124,7 +152,7 @@
       el("text", {
         x: (x(a) + x(b)) / 2, y: M.t - 12,
         "text-anchor": "middle", "font-size": 13, "font-weight": 700,
-        fill: isThis ? COLORS.actual : "#c25e1e",
+        fill: isThis ? COLORS.actual : COLORS.nextMonthLabel,
       }, svg).textContent = isThis ? "deze maand" : "volgende maand";
     });
 
@@ -233,7 +261,7 @@
       const c = el("circle", {
         cx: x(i), cy: y(v), r: 5,
         fill: adjusted ? activeColor : COLORS.pred,
-        stroke: "#fff", "stroke-width": 1.5, cursor: "ns-resize",
+        stroke: COLORS.surface, "stroke-width": 1.5, cursor: "ns-resize",
         "data-i": i, "data-date": d.date,
         tabindex: "0",
         role: "slider",
@@ -351,7 +379,7 @@
     svg.addEventListener("focusout", (evt) => {
       const t = evt.target;
       if (t.tagName === "circle" && t.dataset.i != null) {
-        t.setAttribute("stroke", "#fff");
+        t.setAttribute("stroke", COLORS.surface);
         t.setAttribute("stroke-width", "1.5");
         t.setAttribute("r", "5");
         tip.hidden = true;
@@ -408,5 +436,9 @@
         return c ? c.getBoundingClientRect() : null;
       },
     };
-  };
+  }
+
+  return render;
 })();
+
+export default KVChart;
