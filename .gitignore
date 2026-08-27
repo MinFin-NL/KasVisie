@@ -202,3 +202,5 @@ data/*
 # Claude stuff
 claude.md
 .claude
+
+node_modules

@@ -1,0 +1,9 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+fastapi-cli==0.0.24
+pandas>=2.2
+numpy>=1.26.0
+joplib==1.5.2
+scikit-learn>=1.3.0
+holidays>=0.50
+python-multipart>=0.0.9
