@@ -4,11 +4,6 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>KasVisie · Kasprognose-dashboard</title>
-  <!-- Geen bundler: de browser laadt het design system als kant-en-klare
-       bundel uit vendor/ (opgehaald door scripts/fetch_nldd.py) en de eigen
-       app als ES-module. Beide scripts zijn deferred — de klassieke met
-       `defer`, de module impliciet — dus ze draaien pas na het parsen en in
-       documentvolgorde: componenten eerst upgraden, dan pas app.js. -->
   <link rel="stylesheet" href="/vendor/nldd/css/global.css" />
   <link rel="stylesheet" href="/src/style.css" />
   <script src="/vendor/nldd/nldd.min.js" defer></script>
