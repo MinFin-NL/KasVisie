@@ -154,10 +154,12 @@ Eén proces: uvicorn serveert zowel de API als de frontend, precies zoals de
 container dat doet.
 
 ```sh
-uv sync
+python -m venv .venv
+source .venv/bin/activate               # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
 python scripts/fetch_nldd.py            # één keer na het clonen
 
-uv run uvicorn app.main:app --reload    # pagina + API op :8000
+uvicorn app.main:app --reload           # pagina + API op :8000
 ```
 
 `--reload` herstart de server bij Python-wijzigingen; voor een wijziging in

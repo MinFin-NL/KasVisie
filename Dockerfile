@@ -5,10 +5,10 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /srv/kasvisie
 
-COPY pyproject.toml README.md ./
-COPY app ./app
+COPY requirements.txt ./
+RUN pip install -r requirements.txt
 
-RUN pip install .
+COPY app ./app
 
 COPY index.html ./web/index.html
 COPY src ./web/src
