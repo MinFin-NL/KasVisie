@@ -1,5 +1,7 @@
-# node_modules en dist komen uit de frontend-stage, niet van de bouwmachine:
-# zo bakt een lokale build hetzelfde image als de pipeline.
+# vendor/ haalt de build zelf op (scripts/fetch_nldd.py) en node_modules/dist
+# zijn resten van de oude Vite-opzet: zo bakt een lokale build hetzelfde image
+# als de pipeline.
+vendor/
 node_modules/
 dist/
 

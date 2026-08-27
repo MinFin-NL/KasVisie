@@ -71,41 +71,49 @@ structureel nul, waardoor een verhouding daar betekenisloos is.
 
 ## Frontend en design system
 
-De frontend is platte HTML, CSS en JavaScript — geen framework — gebundeld met
-[Vite](https://vite.dev), net als de invulhulp. De UI is opgebouwd uit de web
-components van het NLDD Design System, dat als gewone npm-afhankelijkheid in
-`package.json` staat en door Vite wordt meegebundeld; er staat dus geen kopie in
-de repo.
+De frontend is platte HTML, CSS en JavaScript — geen framework, en sinds kort ook
+geen bouwstap: de browser laadt `index.html`, `src/*.js` en `src/style.css`
+rechtstreeks. Er is dus geen Node-toolchain nodig, niet lokaal en niet in de
+container.
+
+De UI is opgebouwd uit de web components van het NLDD Design System. Dat komt als
+kant-en-klare bundel uit het npm-register (`dist/nldd.min.js` + de CSS en fonts)
+en wordt opgehaald door `scripts/fetch_nldd.py`, dat alleen de
+Python-standaardbibliotheek gebruikt. Het resultaat staat in `vendor/nldd/` en is
+**niet** gecommit.
 
 | Pad | Wat het is |
 | --- | --- |
-| `index.html` | de pagina; laadt alleen `/src/main.js` als module |
-| `src/main.js` | entry: importeert het design system (componenten + globale stylesheet), `style.css` en `app.js` |
+| `index.html` | de pagina; laadt de NLDD-bundel (klassiek, `defer`) en `src/app.js` (module) |
 | `src/app.js` | de drie schermen, de gegenereerde markup en alle `/api`-aanroepen |
 | `src/chart.js` | de SVG-grafiek; exporteert `KVChart`, geïmporteerd door `app.js` |
 | `src/style.css` | eigen CSS bovenop de componenten |
-| `dist/` | het bouwresultaat dat FastAPI serveert (niet in git) |
+| `scripts/fetch_nldd.py` | haalt het design system op naar `vendor/nldd/` (niet in git) |
+| `vendor/nldd/` | de opgehaalde bundel, CSS en fonts die FastAPI serveert |
 
-De importvolgorde in `main.js` is functioneel: ES-modules draaien in
-importvolgorde, dus het design system registreert al zijn custom elements
-vóór `app.js` de eerste markup opbouwt. Een `nldd-*`-element dat naar zijn
-inhoud kijkt terwijl die er nog niet is trekt anders de verkeerde conclusie —
-`nldd-menu-bar` zet zichzelf op `empty` en verdwijnt.
+De volgorde in `<head>` is functioneel. Beide scripts zijn deferred — het
+klassieke met `defer`, het module-script impliciet — dus ze draaien pas na het
+parsen en in documentvolgorde: het design system registreert al zijn custom
+elements vóór `app.js` de eerste markup opbouwt. Een `nldd-*`-element dat naar
+zijn inhoud kijkt terwijl die er nog niet is trekt anders de verkeerde conclusie
+— `nldd-menu-bar` zet zichzelf op `empty` en verdwijnt. Voeg dus geen script
+zonder `defer` toe.
 
-Bouwen:
-
-```sh
-npm ci
-npm run build     # → dist/
-```
-
-Upgraden van het design system:
+Ophalen (één keer na het clonen, en na elke versiewijziging):
 
 ```sh
-npm install @nldd/design-system@0.9.0   # past package.json én de lockfile aan
+python scripts/fetch_nldd.py            # → vendor/nldd/
 ```
 
-Commit daarna beide manifesten.
+Upgraden van het design system: pas `VERSION` in `scripts/fetch_nldd.py` aan,
+haal de nieuwe hash op en zet die in `SHA512`:
+
+```sh
+python scripts/fetch_nldd.py --version 0.9.0 --print-hash
+```
+
+Die hash is het equivalent van de lockfile: het script weigert een tarball die er
+niet mee overeenkomt, en de Docker-build gebruikt exact hetzelfde script.
 
 Lees vóór een upgrade elke `Breaking`-sectie tussen je huidige en de doelversie
 in de [changelog](https://github.com/MinBZK/storybook/blob/main/skills/nldd/changelog.md):
@@ -122,15 +130,15 @@ het licht/donker-schema.
 
 **Fonts.** RijksSans is auteursrechtelijk beschermd en uitsluitend bestemd voor
 publicaties van de Rijksoverheid en partijen die in haar opdracht werken; zie
-`node_modules/@nldd/design-system/NOTICES.md`. Buiten dat kader vervang je in
-`src/main.js` de import `@nldd/design-system/styles` door
-`@nldd/design-system/styles/system-font` — dezelfde stijlen zonder de
+`NOTICES.md` in het npm-pakket. Buiten dat kader vervang je in `index.html` de
+stylesheet `vendor/nldd/css/global.css` door
+`vendor/nldd/css/global-system-font.css` — dezelfde stijlen zonder de
 `@font-face`-regels.
 
 ## Draaien met Docker
 
-De build draait Vite zelf in een `node`-stage; je hebt lokaal geen Node nodig,
-wel netwerk naar het npm-register.
+Eén stage, alleen Python: de build haalt het design system zelf op met
+`scripts/fetch_nldd.py`. Je hebt netwerk naar het npm-register nodig, geen Node.
 
 ```sh
 docker build -t kasvisie .
@@ -142,27 +150,22 @@ gegenereerde demo-data (30 maanden, incl. vorig jaar).
 
 ## Lokaal ontwikkelen
 
-Twee processen: uvicorn voor de API, Vite voor de frontend. Vite proxyt alles
-onder `/api` naar de backend, dus de frontend gebruikt dezelfde paden als in
-productie.
+Eén proces: uvicorn serveert zowel de API als de frontend, precies zoals de
+container dat doet.
 
 ```sh
-uv sync && npm ci
+uv sync
+python scripts/fetch_nldd.py            # één keer na het clonen
 
-uv run uvicorn app.main:app --reload    # terminal 1 — API op :8000
-npm run dev                             # terminal 2 — pagina op :5173, met hot reload
+uv run uvicorn app.main:app --reload    # pagina + API op :8000
 ```
 
-Wil je in één keer zien wat de container serveert, bouw dan de bundel en laat
-uvicorn hem serveren:
+`--reload` herstart de server bij Python-wijzigingen; voor een wijziging in
+`index.html`, `src/app.js` of `src/style.css` is een verversing van de pagina
+genoeg (harde verversing als de browser de oude versie vasthoudt).
 
-```sh
-npm run build
-uv run uvicorn app.main:app --reload    # serveert dist/ op :8000
-```
-
-De backend weigert te starten zonder `dist/`; met alleen `npm run dev` bouw je
-die niet, dus draai `npm run build` één keer na het clonen.
+De backend weigert te starten zonder `vendor/nldd/`, met de melding welk commando
+je moet draaien.
 
 ## Licentie
 

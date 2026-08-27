@@ -208,3 +208,7 @@ claude.md
 #   Python-distributies) horen niet in git. package.json en package-lock.json
 #   wél: die pinnen de versies, inclusief integriteitshashes.
 node_modules/
+
+# Het NLDD Design System wordt opgehaald met scripts/fetch_nldd.py,
+# niet meegecommit.
+vendor/

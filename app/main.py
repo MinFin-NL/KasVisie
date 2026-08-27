@@ -8,18 +8,19 @@ from pathlib import Path
 
 import pandas as pd
 from fastapi import Body, FastAPI, HTTPException, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from . import export, modelcard, models
 from .data import NL_HOLIDAYS, STORE, parse_csv
 
-# De frontend is een Vite-bundel: `npm run build` zet het resultaat in dist/,
-# inclusief het NLDD Design System dat als npm-afhankelijkheid meegebundeld
-# wordt. In de container ligt dist/ niet naast de geïnstalleerde app (die draait
-# uit site-packages), dus wijst de Dockerfile hem aan met KASVISIE_DIST.
-DIST_DIR = Path(
-    os.environ.get("KASVISIE_DIST", Path(__file__).resolve().parent.parent / "dist")
+# De frontend heeft geen bouwstap: index.html, src/ en het NLDD Design System in
+# vendor/ gaan zoals ze zijn naar de browser. vendor/nldd staat niet in git —
+# scripts/fetch_nldd.py haalt het pakket op (lokaal en in de Dockerfile). In de
+# container ligt de frontend niet naast de geïnstalleerde app (die draait uit
+# site-packages), dus wijst de Dockerfile de map aan met KASVISIE_WEB.
+WEB_ROOT = Path(
+    os.environ.get("KASVISIE_WEB", Path(__file__).resolve().parent.parent)
 )
 
 # De modellen zijn deterministisch (random_state=0), dus een prognose hoeft per
@@ -226,14 +227,28 @@ def export_forecast(payload: dict = Body(...)) -> Response:
     )
 
 
-if not DIST_DIR.is_dir():
-    # Meteen falen is duidelijker dan een 404 op de startpagina: de frontend is
-    # niet gebouwd.
+INDEX_HTML = WEB_ROOT / "index.html"
+SRC_DIR = WEB_ROOT / "src"
+VENDOR_DIR = WEB_ROOT / "vendor"
+
+if not INDEX_HTML.is_file() or not SRC_DIR.is_dir():
+    # Meteen falen is duidelijker dan een 404 op de startpagina.
     raise RuntimeError(
-        f"Frontend-bundel niet gevonden in {DIST_DIR}. "
-        "Draai `npm ci && npm run build` (of zet KASVISIE_DIST)."
+        f"Frontend niet gevonden in {WEB_ROOT} (index.html + src/). Zet KASVISIE_WEB."
+    )
+if not (VENDOR_DIR / "nldd" / "nldd.min.js").is_file():
+    raise RuntimeError(
+        "NLDD Design System niet gevonden in vendor/nldd. "
+        "Draai `python scripts/fetch_nldd.py`."
     )
 
-# Als laatste gemount: routes worden op volgorde gematcht, dus /api/* wint van
-# deze mount. html=True serveert index.html op /.
-app.mount("/", StaticFiles(directory=DIST_DIR, html=True), name="frontend")
+
+@app.get("/")
+def index() -> FileResponse:
+    return FileResponse(INDEX_HTML)
+
+
+# Alleen deze twee mappen gaan naar de browser; de rest van de repo (app/,
+# data/) blijft buiten bereik. Na de /api-routes gemount, dus die winnen.
+app.mount("/src", StaticFiles(directory=SRC_DIR), name="src")
+app.mount("/vendor", StaticFiles(directory=VENDOR_DIR), name="vendor")
