@@ -1,19 +1,9 @@
 <!doctype html>
-<!-- Het kleurschema staat vast op licht (data-scheme="light"), net als in de
-     invulhulp. NLDD levert voor elke kleur een light-dark()-paar, dus het
-     weghalen van dit attribuut is genoeg om donkere modus later aan te zetten. -->
 <html lang="nl" data-scheme="light">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>KasVisie · Kasprognose-dashboard</title>
-  <!-- Eén module-entry: die haalt @nldd/design-system (componenten + globale
-       stylesheet), style.css en app.js binnen — Vite bundelt ze. type="module"
-       is impliciet deferred, dus de componenten registreren pas nadat de HTML
-       geparsed is. Dat is nodig: upgradet een element al zodra de parser zijn
-       openingstag ziet, dan kijkt het naar nog-lege inhoud en concludeert
-       bijvoorbeeld nldd-menu-bar dat hij leeg is
-       (`:host([empty]) { display: none }`). -->
   <script type="module" src="/src/main.js"></script>
 </head>
 <body>
@@ -27,11 +17,6 @@
           logo-href="#grafiek"
           width="1280px">
         </nldd-top-navigation-bar>
-        <!-- De applicatienaam en de hoofdnavigatie op één regel. Bewust niet via
-             `website-title` + de `global`-slot van nldd-top-navigation-bar: die
-             zet de titel op een eigen regel bóven de menubalk, en klapt de
-             menubalk onder lg in achter de menuknop — dan zijn Gegevens en
-             Modelkaart niet meer direct zichtbaar. -->
         <div class="kv-navbar">
           <nldd-container max-width="1280px" layout="row" gap="24" sm-gap="16"
                           vertical-alignment="center"
@@ -111,7 +96,6 @@
         </nldd-container>
       </nldd-simple-section>
 
-      <!-- ══════════ Scherm 2: prognose ══════════ -->
       <nldd-simple-section id="screen-grafiek" width="1280px" hidden>
         <nldd-container layout="stack" gap="24">
           <div id="graph-freshness"></div>
@@ -138,11 +122,6 @@
                                              text="Prognose berekenen" show-text></nldd-activity-indicator>
                   </div>
 
-                  <!-- Exacte invoer voor één dag, geopend door klikken of Enter op een punt.
-                       Bewust geen nldd-popover: die verankert zich aan een trigger-element
-                       met een id, en de trigger is hier een <circle> in de SVG dat bij elke
-                       hertekening verdwijnt. Het paneel positioneert zichzelf dus zelf; de
-                       inhoud is wél opgebouwd uit componenten. -->
                   <div id="point-editor" class="kv-editor" role="dialog"
                        aria-labelledby="editor-title" hidden>
                     <nldd-container padding="16" gap="8">
@@ -208,8 +187,6 @@
                 <nldd-title size="4"><h2>Filters &amp; opties</h2></nldd-title>
 
                 <div>
-                  <!-- Het keuzemenu verschijnt vanzelf zodra de server meer dan één model
-                       aanbiedt; bij één model staat er een vaste regel. -->
                   <nldd-form-field label="Model" id="model-select-wrapper" hidden>
                     <nldd-dropdown size="sm">
                       <select id="model-select"></select>
@@ -284,11 +261,6 @@
 
   </nldd-page>
 
-  <!-- Bèta-melding, exact zoals in de invulhulp: alleen de melding zelf zweeft
-       onderin beeld — geen nldd-page-footer, want die tekent een eigen band over
-       de volle breedte en die zou dan permanent zichtbaar zijn. De omhullende
-       balk vangt geen muisklikken (pointer-events), zodat je door de lege ruimte
-       ernaast gewoon de pagina eronder bedient. -->
   <footer class="kv-footer" role="contentinfo" aria-label="Bèta-melding">
     <div class="kv-footer__inner">
       <nldd-banner variant="warning" size="sm">
