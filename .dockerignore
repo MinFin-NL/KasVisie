@@ -1,0 +1,14 @@
+# vendor/ haalt de build zelf op (scripts/fetch_nldd.py) en node_modules/dist
+# zijn resten van de oude Vite-opzet: zo bakt een lokale build hetzelfde image
+# als de pipeline.
+vendor/
+node_modules/
+dist/
+
+.git
+.venv
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.idea/

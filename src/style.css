@@ -1,0 +1,314 @@
+/* KasVisie — dunne laag bovenop het NLDD Design System (@nldd/design-system,
+   Nederlandse Digitale Dienst). De componenten dragen de huisstijl en de
+   toegankelijkheid; wat hier staat is alleen wat géén component is: de twee
+   paginarasters, de grafiek en de twee panelen die zich aan de grafiek
+   verankeren. Alle waarden komen uit de NLDD-variabelen (--primitives-*,
+   --semantics-*); niets is hardgecodeerd behalve het grafiekpalet, dat
+   hieronder apart verantwoord wordt. */
+
+/* Web components zetten hun eigen display op :host, en die wint van het
+   user-agent-stijlblad voor [hidden]. Eén regel maakt [hidden] weer
+   betrouwbaar op elk nldd-*-element dat de app in of uit beeld haalt. */
+[hidden] { display: none !important; }
+
+/* ── Grafiekpalet ──────────────────────────────────────────
+   Bewust buiten de huisstijlkleuren: dit zijn categorische reekskleuren, die
+   onderling onderscheidbaar én kleurenblind-veilig moeten zijn. Ze staan hier
+   als variabele zodat chart.js ze uit de CSS leest en de grafiekchroom (raster,
+   assen) wél met het NLDD-kleurschema meebeweegt. */
+:root {
+  --kv-series-actual: #2f6cb3;
+  --kv-series-pred: #d52b1e;
+  --kv-series-lastyear: #3d8757;
+
+  /* Grafiekchroom volgt het thema (licht/donker) via de semantics. */
+  --kv-chart-grid: var(--semantics-surfaces-tinted-border-color);
+  --kv-chart-axis: var(--semantics-content-secondary-color);
+  --kv-chart-focus: var(--semantics-content-color);
+  --kv-chart-surface: var(--semantics-surfaces-base-background-color);
+}
+
+.kv-main { display: block; }
+/* Ruimte onder de laatste inhoud, zodat die niet blijvend onder de zwevende
+   bèta-melding verdwijnt — dat was destijds precies het bezwaar tegen een vaste
+   balk: hij lag over "Alle bijstellingen wissen" heen. */
+.kv-main { padding-block-end: var(--primitives-space-64); }
+
+/* ── Bèta-melding ──────────────────────────────────────────
+   Zweeft onderin beeld, zoals in de invulhulp: geen nldd-page-footer, want die
+   tekent een band over de volle breedte die dan permanent in beeld staat. */
+.kv-footer {
+  position: fixed;
+  inset-block-end: 0;
+  inset-inline: 0;
+  z-index: 100;
+  /* De balk zelf vangt niets; alleen de melding erin is aanklikbaar. */
+  pointer-events: none;
+}
+.kv-footer__inner {
+  pointer-events: auto;
+  max-inline-size: 1280px;
+  margin-inline: auto;
+  padding-block: var(--primitives-space-4);
+  padding-inline: var(--primitives-space-16);
+}
+
+/* ── Navigatiebalk ─────────────────────────────────────────
+   Applicatienaam en hoofdnavigatie op één regel, onder de logobalk en op
+   dezelfde breedte.
+
+   nldd-top-navigation-bar zet zelf geen achtergrond, dus daar scheen de
+   getinte pagina-achtergrond van nldd-app-view doorheen en stak de witte
+   navigatiebalk eronder af. Beide balken krijgen hier hetzelfde
+   basisoppervlak, zodat de kop één vlak is. Alleen de host wordt gestyled;
+   de shadow DOM blijft ongemoeid. */
+nldd-top-navigation-bar,
+.kv-navbar {
+  background: var(--semantics-surfaces-base-background-color);
+}
+/* De scheidslijn staat alleen onder de kop als geheel, niet tussen de logobalk
+   en de navigatiebalk in. */
+.kv-navbar {
+  border-block-end: var(--semantics-surfaces-border-width) solid
+    var(--semantics-surfaces-base-border-color);
+}
+.kv-navbar nldd-container { margin-inline: auto; }
+/* De menubalk-items dragen hun eigen verticale padding; de titel krijgt hier
+   dezelfde hoogte zodat beide op één onderlijn staan. */
+.kv-navbar__title { flex: none; }
+.kv-navbar nldd-menu-bar { min-inline-size: 0; }
+
+/* ── Paginarasters ─────────────────────────────────────────
+   nldd-container dekt stack, row, wrap en een auto-fit grid af, maar niet een
+   vaste zijkolom naast een meegroeiende hoofdkolom. Bewust geen split view:
+   die verbergt het rechterpaneel op smalle schermen, en dat paneel bevat hier
+   juist de bediening (model, weergave, export). Gestapeld blijft alles
+   bereikbaar. */
+.kv-graph-layout {
+  display: grid;
+  /* minmax(0, 1fr), niet 1fr: een kolom van 1fr krijgt een automatische
+     minimumbreedte van zijn inhoud, waardoor de brede grafiek de héle pagina
+     horizontaal laat scrollen in plaats van alleen zijn eigen container. */
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--primitives-space-24);
+  align-items: start;
+}
+
+@media (max-width: 1007px) {
+  .kv-graph-layout { grid-template-columns: minmax(0, 1fr); }
+  /* Op smalle schermen eerst de bediening, dan pas de grafiek: anders moet je
+     langs een grafiek van een halve meter scrollen om een model te kiezen. */
+  .kv-graph-layout .kv-sidebar { order: -1; }
+}
+
+/* Zelfde reden: de kaart mag nooit breder worden dan zijn grid-kolom. */
+.kv-chart-card { min-inline-size: 0; position: relative; }
+
+.kv-field--narrow { max-inline-size: 20rem; }
+
+/* ── KPI-tegels ────────────────────────────────────────────
+   Eigen raster omdat de tegels op elke breedte even breed moeten blijven; de
+   tegels zelf zijn nldd-card. */
+.kv-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--primitives-space-16);
+}
+
+.kv-kpi__value { font-variant-numeric: tabular-nums; }
+
+/* ── Grafiek ───────────────────────────────────────────────
+   Onder een leesbare breedte per dag scrollt de grafiek horizontaal in plaats
+   van 59 dagen in 300 px te persen. */
+.kv-chart-wrap {
+  position: relative;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+#chart { display: block; inline-size: 100%; block-size: auto; touch-action: pan-x; }
+
+.kv-chart-busy {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--kv-chart-surface) 72%, transparent);
+  z-index: 4;
+}
+.kv-chart-card.is-busy .kv-chart-busy { display: flex; }
+.kv-chart-card.is-busy #chart { opacity: 0.3; }
+/* De grafiek is bij eerste weergave leeg; reserveer de hoogte zodat de kaart
+   niet opspringt zodra de eerste prognose binnenkomt. */
+.kv-chart-card.is-busy .kv-chart-wrap { min-block-size: 320px; }
+/* Geen sleepinstructie zolang er nog geen punten zijn om te slepen. */
+.kv-chart-card.is-busy .kv-hint { visibility: hidden; }
+
+.kv-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--primitives-space-4) var(--primitives-space-24);
+  font: var(--primitives-font-body-sm-regular-snug);
+  color: var(--semantics-content-secondary-color);
+}
+.kv-legend .swatch {
+  display: inline-block;
+  inline-size: 1.4em;
+  block-size: 0;
+  border-block-start: 3px solid;
+  vertical-align: middle;
+  margin-inline-end: 0.4em;
+}
+.kv-legend .swatch--dashed { border-block-start-style: dashed; }
+.kv-legend .swatch--dotted { border-block-start-style: dotted; }
+.kv-legend .swatch--band {
+  block-size: 0.9em;
+  border: none;
+  background: color-mix(in srgb, var(--kv-series-pred) 18%, transparent);
+}
+.kv-legend .swatch--shade {
+  block-size: 0.9em;
+  border: none;
+  background: var(--semantics-surfaces-tinted-background-color);
+}
+
+/* Volgt de grafiekcursor, dus geen component: een popover of tooltip verankert
+   zich aan een vast element, deze aan een muispositie. */
+.kv-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--semantics-content-color);
+  color: var(--semantics-content-contrast-color);
+  font: var(--primitives-font-body-xs-regular-snug);
+  padding: var(--primitives-space-4) var(--primitives-space-8);
+  border-radius: var(--semantics-surfaces-corner-radius);
+  max-inline-size: 240px;
+  z-index: 5;
+}
+
+/* ── Scenariobalk ──────────────────────────────────────────
+   nldd-tab-bar draagt de tabs zelf; alleen de knop ernaast moet uitlijnen. */
+.kv-scenario-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--primitives-space-8);
+}
+.kv-scenario-bar nldd-tab-bar { flex: 1 1 auto; min-inline-size: 0; }
+
+/* Kleurstip in een scenariotab: de enige plek waar de scenariokleur uit het
+   grafiekpalet ook buiten de grafiek nodig is. */
+.kv-scenario-dot {
+  display: block;
+  inline-size: 0.7em;
+  block-size: 0.7em;
+  border-radius: 50%;
+}
+
+/* ── Exacte invoer bij een punt ────────────────────────────
+   Zweeft boven de grafiek en positioneert zichzelf op het aangeklikte punt;
+   de inhoud is opgebouwd uit componenten. */
+.kv-editor {
+  position: absolute;
+  z-index: 6;
+  inline-size: 17rem;
+  max-inline-size: calc(100% - 1rem);
+  background: var(--semantics-surfaces-base-background-color);
+  border: var(--semantics-surfaces-border-width) solid var(--semantics-surfaces-base-border-color);
+  border-radius: var(--semantics-surfaces-corner-radius);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
+}
+.kv-editor__quick nldd-button { flex: 1 1 0; min-inline-size: 0; }
+
+/* ── Bijstellingen ─────────────────────────────────────────
+   De lijst zelf is een nldd-list; alleen de kop en de voet zijn een eigen
+   flexregel, omdat een veld en twee knoppen op één onderlijn moeten staan. */
+.kv-adjust-panel__head {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--primitives-space-16);
+}
+/* Begrensd: een scenarionaam is kort, en een veld dat doorgroeit tot de hele
+   paneelbreedte duwt de knoppen die erbij horen ver van het veld af. */
+.kv-field--inline {
+  flex: 0 1 20rem;
+  min-inline-size: 11rem;
+}
+
+.kv-adjust-panel__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--primitives-space-16);
+}
+#adjust-info { flex: 1 1 16rem; }
+
+/* De twee rijacties naast elkaar; de cel is fit-content en zou ze anders
+   onder elkaar zetten zodra de tekst niet past. */
+.kv-adjust-actions {
+  display: flex;
+  gap: var(--primitives-space-4);
+}
+
+.kv-adjust-values {
+  display: grid;
+  grid-template-columns: 7.5rem 1.25rem 7.5rem;
+  align-items: baseline;
+  gap: var(--primitives-space-4);
+  font-variant-numeric: tabular-nums;
+}
+.kv-adjust-values > * { text-align: right; }
+.kv-adjust-values > [aria-hidden] { text-align: center; }
+.kv-adjust-values .kv-adjust-base { text-decoration: line-through; }
+
+@media (max-width: 640px) {
+  .kv-field--inline { flex: 1 1 100%; }
+  .kv-adjust-values { grid-template-columns: auto 1.25rem auto; }
+}
+
+/* ── Zijbalk ───────────────────────────────────────────────*/
+.kv-sidebar { min-inline-size: 0; }
+.kv-field-help { display: block; margin-block-start: var(--primitives-space-4); }
+.kv-export-buttons { margin-block-start: var(--primitives-space-8); }
+.kv-export-buttons nldd-button { flex: 1 1 0; min-inline-size: 0; }
+
+.kv-switch-row {
+  display: flex;
+  align-items: center;
+  gap: var(--primitives-space-8);
+}
+.kv-switch-row nldd-switch-field { flex: 1 1 auto; }
+
+.kv-hint { display: block; }
+
+/* ── Modelkaart ────────────────────────────────────────────*/
+.kv-modelcard__title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--primitives-space-8);
+}
+
+/* Onder deze breedte wordt de kenmerkentabel platgeknepen en breken de
+   kenmerknamen middenin ("is_weeke nd"); nldd-table scrollt dan zelf. */
+#screen-model code { overflow-wrap: normal; white-space: nowrap; }
+
+.kv-fingerprint {
+  font-family: var(--primitives-font-family-monospace);
+  overflow-wrap: anywhere;
+}
+
+.kv-changelog__item {
+  padding-inline-start: var(--primitives-space-16);
+  border-inline-start: 3px solid var(--semantics-surfaces-tinted-border-color);
+}
+.kv-changelog__item:first-child { border-inline-start-color: var(--semantics-content-accent-color); }
+.kv-changelog__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--primitives-space-8);
+  margin-block-end: var(--primitives-space-8);
+}

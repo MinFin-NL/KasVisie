@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import date as _date
 from pathlib import Path
 
@@ -13,7 +14,14 @@ from fastapi.staticfiles import StaticFiles
 from . import export, modelcard, models
 from .data import NL_HOLIDAYS, STORE, parse_csv
 
-STATIC_DIR = Path(__file__).resolve().parent / "static"
+# De frontend heeft geen bouwstap: index.html, src/ en het NLDD Design System in
+# vendor/ gaan zoals ze zijn naar de browser. vendor/nldd staat niet in git —
+# scripts/fetch_nldd.py haalt het pakket op (lokaal en in de Dockerfile). In de
+# container ligt de frontend niet naast de geïnstalleerde app (die draait uit
+# site-packages), dus wijst de Dockerfile de map aan met KASVISIE_WEB.
+WEB_ROOT = Path(
+    os.environ.get("KASVISIE_WEB", Path(__file__).resolve().parent.parent)
+)
 
 # De modellen zijn deterministisch (random_state=0), dus een prognose hoeft per
 # (dataset, model) maar één keer berekend te worden. Scheelt ~600 ms per klik.
@@ -219,9 +227,28 @@ def export_forecast(payload: dict = Body(...)) -> Response:
     )
 
 
+INDEX_HTML = WEB_ROOT / "index.html"
+SRC_DIR = WEB_ROOT / "src"
+VENDOR_DIR = WEB_ROOT / "vendor"
+
+if not INDEX_HTML.is_file() or not SRC_DIR.is_dir():
+    # Meteen falen is duidelijker dan een 404 op de startpagina.
+    raise RuntimeError(
+        f"Frontend niet gevonden in {WEB_ROOT} (index.html + src/). Zet KASVISIE_WEB."
+    )
+if not (VENDOR_DIR / "nldd" / "nldd.min.js").is_file():
+    raise RuntimeError(
+        "NLDD Design System niet gevonden in vendor/nldd. "
+        "Draai `python scripts/fetch_nldd.py`."
+    )
+
+
 @app.get("/")
 def index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+    return FileResponse(INDEX_HTML)
 
 
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+# Alleen deze twee mappen gaan naar de browser; de rest van de repo (app/,
+# data/) blijft buiten bereik. Na de /api-routes gemount, dus die winnen.
+app.mount("/src", StaticFiles(directory=SRC_DIR), name="src")
+app.mount("/vendor", StaticFiles(directory=VENDOR_DIR), name="vendor")

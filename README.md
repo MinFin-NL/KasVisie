@@ -1,8 +1,9 @@
 # KasVisie — Kasprognose-dashboard
 
-Interactief dashboard voor dagelijkse kasstroomprognoses, gebouwd met
-[NL Design System](https://nldesignsystem.nl/) (Rijkshuisstijl Community-tokens +
-Utrecht-componenten) en een FastAPI-backend. Alles draait in één Docker-container.
+Interactief dashboard voor dagelijkse kasstroomprognoses, gebouwd met het
+[NLDD Design System](https://minbzk.github.io/storybook/) (`@nldd/design-system`,
+Nederlandse Digitale Dienst) en een FastAPI-backend. Alles draait in één
+Docker-container.
 
 ## Schermen
 
@@ -68,7 +69,76 @@ Die verhouding is begrensd op 0,2× – 5×, zowel per losse bijstelling als
 cumulatief. Weekend- en feestdagen zijn niet bij te stellen: hun prognose is
 structureel nul, waardoor een verhouding daar betekenisloos is.
 
+## Frontend en design system
+
+De frontend is platte HTML, CSS en JavaScript — geen framework, en sinds kort ook
+geen bouwstap: de browser laadt `index.html`, `src/*.js` en `src/style.css`
+rechtstreeks. Er is dus geen Node-toolchain nodig, niet lokaal en niet in de
+container.
+
+De UI is opgebouwd uit de web components van het NLDD Design System. Dat komt als
+kant-en-klare bundel uit het npm-register (`dist/nldd.min.js` + de CSS en fonts)
+en wordt opgehaald door `scripts/fetch_nldd.py`, dat alleen de
+Python-standaardbibliotheek gebruikt. Het resultaat staat in `vendor/nldd/` en is
+**niet** gecommit.
+
+| Pad | Wat het is |
+| --- | --- |
+| `index.html` | de pagina; laadt de NLDD-bundel (klassiek, `defer`) en `src/app.js` (module) |
+| `src/app.js` | de drie schermen, de gegenereerde markup en alle `/api`-aanroepen |
+| `src/chart.js` | de SVG-grafiek; exporteert `KVChart`, geïmporteerd door `app.js` |
+| `src/style.css` | eigen CSS bovenop de componenten |
+| `scripts/fetch_nldd.py` | haalt het design system op naar `vendor/nldd/` (niet in git) |
+| `vendor/nldd/` | de opgehaalde bundel, CSS en fonts die FastAPI serveert |
+
+De volgorde in `<head>` is functioneel. Beide scripts zijn deferred — het
+klassieke met `defer`, het module-script impliciet — dus ze draaien pas na het
+parsen en in documentvolgorde: het design system registreert al zijn custom
+elements vóór `app.js` de eerste markup opbouwt. Een `nldd-*`-element dat naar
+zijn inhoud kijkt terwijl die er nog niet is trekt anders de verkeerde conclusie
+— `nldd-menu-bar` zet zichzelf op `empty` en verdwijnt. Voeg dus geen script
+zonder `defer` toe.
+
+Ophalen (één keer na het clonen, en na elke versiewijziging):
+
+```sh
+python scripts/fetch_nldd.py            # → vendor/nldd/
+```
+
+Upgraden van het design system: pas `VERSION` in `scripts/fetch_nldd.py` aan,
+haal de nieuwe hash op en zet die in `SHA512`:
+
+```sh
+python scripts/fetch_nldd.py --version 0.9.0 --print-hash
+```
+
+Die hash is het equivalent van de lockfile: het script weigert een tarball die er
+niet mee overeenkomt, en de Docker-build gebruikt exact hetzelfde script.
+
+Lees vóór een upgrade elke `Breaking`-sectie tussen je huidige en de doelversie
+in de [changelog](https://github.com/MinBZK/storybook/blob/main/skills/nldd/changelog.md):
+semantic-release verhoogt ook bij een breaking change alleen het patch-nummer, dus
+het versienummer alleen zegt niets.
+
+Eigen CSS (`src/style.css`) blijft beperkt tot wat geen component is: de
+twee paginarasters, de grafiek en de twee panelen die zich aan de grafiek
+verankeren. Alle waarden komen uit de NLDD-variabelen, met één bewuste
+uitzondering: het categorische grafiekpalet (`--kv-series-*`), dat CVD-veilig en
+onderling onderscheidbaar moet zijn en daarom buiten de huisstijl valt. De
+grafiek*chroom* (raster, assen) komt wél uit de semantics en beweegt dus mee met
+het licht/donker-schema.
+
+**Fonts.** RijksSans is auteursrechtelijk beschermd en uitsluitend bestemd voor
+publicaties van de Rijksoverheid en partijen die in haar opdracht werken; zie
+`NOTICES.md` in het npm-pakket. Buiten dat kader vervang je in `index.html` de
+stylesheet `vendor/nldd/css/global.css` door
+`vendor/nldd/css/global-system-font.css` — dezelfde stijlen zonder de
+`@font-face`-regels.
+
 ## Draaien met Docker
+
+Eén stage, alleen Python: de build haalt het design system zelf op met
+`scripts/fetch_nldd.py`. Je hebt netwerk naar het npm-register nodig, geen Node.
 
 ```sh
 docker build -t kasvisie .
@@ -80,10 +150,28 @@ gegenereerde demo-data (30 maanden, incl. vorig jaar).
 
 ## Lokaal ontwikkelen
 
+De app draait op **Python 3.11** — dezelfde versie als de container
+(`python:3.11-slim`). `.python-version` zet die vast voor pyenv; alle pins in
+`requirements.txt` zijn op 3.11 geresolved en getest.
+
+Eén proces: uvicorn serveert zowel de API als de frontend, precies zoals de
+container dat doet.
+
 ```sh
-uv sync
-uv run uvicorn app.main:app --reload
+python3.11 -m venv .venv
+source .venv/bin/activate               # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+python scripts/fetch_nldd.py            # één keer na het clonen
+
+uvicorn app.main:app --reload           # pagina + API op :8000
 ```
+
+`--reload` herstart de server bij Python-wijzigingen; voor een wijziging in
+`index.html`, `src/app.js` of `src/style.css` is een verversing van de pagina
+genoeg (harde verversing als de browser de oude versie vasthoudt).
+
+De backend weigert te starten zonder `vendor/nldd/`, met de melding welk commando
+je moet draaien.
 
 ## Licentie
 

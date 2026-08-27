@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="nl" data-scheme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KasVisie · Kasprognose-dashboard</title>
+  <link rel="stylesheet" href="/vendor/nldd/css/global.css" />
+  <link rel="stylesheet" href="/src/style.css" />
+  <script src="/vendor/nldd/nldd.min.js" defer></script>
+  <script type="module" src="/src/app.js"></script>
+</head>
+<body>
+<nldd-app-view background="tinted">
+  <nldd-page>
+    <div slot="header">
+      <nldd-skip-link href="main" text="Direct naar de inhoud">
+        <nldd-top-navigation-bar
+          logo-title="Ministerie van Financiën"
+          logo-subtitle="Kasprognose"
+          logo-href="#grafiek"
+          width="1280px">
+        </nldd-top-navigation-bar>
+        <div class="kv-navbar">
+          <nldd-container max-width="1280px" layout="row" gap="24" sm-gap="16"
+                          vertical-alignment="center"
+                          padding-inline="16" sm-padding-inline="8">
+            <nldd-text size="lg" weight="bold" class="kv-navbar__title">KasVisie</nldd-text>
+            <nldd-menu-bar accessible-label="Hoofdnavigatie">
+              <nldd-menu-bar-item id="tab-data" href="#data" text="Gegevens"></nldd-menu-bar-item>
+              <nldd-menu-bar-item id="tab-grafiek" href="#grafiek" text="Prognose"></nldd-menu-bar-item>
+              <nldd-menu-bar-item id="tab-model" href="#model" text="Modelkaart"></nldd-menu-bar-item>
+            </nldd-menu-bar>
+          </nldd-container>
+        </div>
+      </nldd-skip-link>
+    </div>
+
+    <main id="main" tabindex="-1" class="kv-main">
+      <!-- ══════════ Scherm 1: gegevens ══════════ -->
+      <nldd-simple-section id="screen-data" width="1280px" hidden>
+        <nldd-container layout="stack" gap="24">
+          <nldd-container layout="grid" column-count="2" sm-column-count="1" gap="24">
+            <nldd-card>
+              <nldd-container padding="24" gap="16">
+                <nldd-title size="3"><h2>Data uploaden</h2></nldd-title>
+                <nldd-form id="upload-form">
+                  <nldd-form-field label="CSV-bestand">
+                    <nldd-file-field id="upload-file" name="file"
+                                     accept=".csv,text/csv"></nldd-file-field>
+                    <nldd-form-field-help-text>
+                      Een datumkolom (<code>date</code> of <code>datum</code>) en een bedragkolom
+                      (<code>cashflow</code>, <code>bedrag</code> of <code>amount</code>).
+                    </nldd-form-field-help-text>
+                  </nldd-form-field>
+                  <nldd-form-actions>
+                    <nldd-button-group orientation="horizontal" size="sm">
+                      <nldd-button variant="primary" size="sm" type="submit" text="Uploaden"></nldd-button>
+                      <nldd-button id="btn-demo" variant="secondary" size="sm"
+                                   text="Demo-data laden"></nldd-button>
+                    </nldd-button-group>
+                  </nldd-form-actions>
+                </nldd-form>
+                <div id="upload-alert" role="status"></div>
+              </nldd-container>
+            </nldd-card>
+
+            <nldd-card>
+              <nldd-container padding="24" gap="16">
+                <nldd-title size="3"><h2>Huidige dataset</h2></nldd-title>
+                <nldd-list id="dataset-summary" variant="simple" dividers="never"
+                           accessible-label="Kenmerken van de huidige dataset"></nldd-list>
+              </nldd-container>
+            </nldd-card>
+          </nldd-container>
+
+          <div id="data-freshness"></div>
+
+          <nldd-card>
+            <nldd-container padding="24" gap="16">
+              <nldd-title size="3"><h2>Data inspecteren</h2></nldd-title>
+              <nldd-form-field label="Maand" class="kv-field--narrow">
+                <nldd-dropdown size="sm" width="16rem">
+                  <select id="table-month"></select>
+                </nldd-dropdown>
+              </nldd-form-field>
+              <nldd-table id="data-table" accessible-label="Kasstromen per dag"
+                          columns="minmax(120px, 1fr) 72px minmax(140px, 1fr) minmax(140px, 1fr)"
+                          sm-columns="minmax(100px, 1fr) minmax(120px, 1fr)"
+                          empty-text="Geen dagen in deze maand.">
+                <nldd-table-row slot="header">
+                  <nldd-text-cell text="Datum"></nldd-text-cell>
+                  <nldd-text-cell text="Dag" hide-below="md"></nldd-text-cell>
+                  <nldd-text-cell text="Cashflow" horizontal-alignment="right"></nldd-text-cell>
+                  <nldd-text-cell text="Bijzonderheid" hide-below="md"></nldd-text-cell>
+                </nldd-table-row>
+              </nldd-table>
+            </nldd-container>
+          </nldd-card>
+        </nldd-container>
+      </nldd-simple-section>
+
+      <nldd-simple-section id="screen-grafiek" width="1280px" hidden>
+        <nldd-container layout="stack" gap="24">
+          <div id="graph-freshness"></div>
+          <div id="kpi-row" class="kv-kpi-row"></div>
+
+          <nldd-card id="totals-panel" hidden></nldd-card>
+
+          <div class="kv-graph-layout">
+            <nldd-card id="chart-card" class="kv-chart-card">
+              <nldd-container padding="24" gap="16">
+                <div class="kv-scenario-bar">
+                  <nldd-tab-bar id="scenario-tabs" accessible-label="Scenario's"></nldd-tab-bar>
+                  <nldd-button id="btn-add-scenario" variant="neutral-transparent" size="sm"
+                               start-icon="plus" text="Scenario"></nldd-button>
+                </div>
+
+                <div id="chart-legend" class="kv-legend"></div>
+
+                <div class="kv-chart-wrap">
+                  <svg id="chart" aria-label="Kasprognose per dag"></svg>
+                  <div id="chart-tooltip" class="kv-tooltip" hidden></div>
+                  <div class="kv-chart-busy" aria-hidden="true">
+                    <nldd-activity-indicator size="24" timing="instant"
+                                             text="Prognose berekenen" show-text></nldd-activity-indicator>
+                  </div>
+
+                  <div id="point-editor" class="kv-editor" role="dialog"
+                       aria-labelledby="editor-title" hidden>
+                    <nldd-container padding="16" gap="8">
+                      <nldd-text id="editor-title" size="sm" weight="bold"></nldd-text>
+                      <nldd-text id="editor-base" size="xs" color="secondary"></nldd-text>
+                      <nldd-form-field label="Nieuwe waarde (€)">
+                        <nldd-number-field id="editor-value" step="0.01" hide-spin-buttons
+                                           width="full"></nldd-number-field>
+                      </nldd-form-field>
+                      <nldd-text id="editor-delta" size="xs" color="secondary"></nldd-text>
+                      <nldd-container layout="row" gap="4" class="kv-editor__quick"
+                                      role="group" aria-label="Snelle stappen">
+                        <nldd-button variant="neutral-tinted" size="xs" data-pct="-10" text="−10%"></nldd-button>
+                        <nldd-button variant="neutral-tinted" size="xs" data-pct="-5" text="−5%"></nldd-button>
+                        <nldd-button variant="neutral-tinted" size="xs" data-pct="5" text="+5%"></nldd-button>
+                        <nldd-button variant="neutral-tinted" size="xs" data-pct="10" text="+10%"></nldd-button>
+                      </nldd-container>
+                      <nldd-container layout="wrap" gap="8">
+                        <nldd-button id="editor-apply" variant="primary" size="sm" text="Toepassen"></nldd-button>
+                        <nldd-button id="editor-remove" variant="critical-tinted" size="sm" text="Verwijderen"></nldd-button>
+                        <nldd-button id="editor-cancel" variant="neutral-transparent" size="sm" text="Annuleren"></nldd-button>
+                      </nldd-container>
+                    </nldd-container>
+                  </div>
+                </div>
+
+                <nldd-text size="sm" color="secondary" class="kv-hint">
+                  Klik een prognosepunt aan voor een exacte waarde, of sleep het omhoog of omlaag voor een
+                  snelle schatting; latere dagen bewegen evenredig mee. Met het toetsenbord: Tab naar een punt,
+                  pijltjes voor stappen van 1% (Shift: 10%), Enter voor exacte invoer, Delete om te wissen.
+                  Weekend- en feestdagen zijn niet bij te stellen.
+                </nldd-text>
+
+                <nldd-box id="adjust-panel" background="tinted" hidden>
+                  <nldd-container padding="16" gap="16">
+                    <div class="kv-adjust-panel__head">
+                      <nldd-form-field label="Scenarionaam" class="kv-field--inline">
+                        <nldd-text-field id="scenario-name" size="sm"></nldd-text-field>
+                      </nldd-form-field>
+                      <nldd-button-group orientation="horizontal" size="sm">
+                        <nldd-button id="btn-dup-scenario" variant="secondary" size="sm"
+                                     text="Dupliceren"></nldd-button>
+                        <nldd-button id="btn-del-scenario" variant="secondary" size="sm"
+                                     text="Scenario verwijderen"></nldd-button>
+                      </nldd-button-group>
+                    </div>
+                    <nldd-list id="adjust-list" variant="box-base" dividers="always"
+                               accessible-label="Bijstellingen in dit scenario"
+                               empty-text="Nog geen bijstellingen in dit scenario"
+                               empty-supporting-text="Klik een prognosepunt aan om er een toe te voegen."></nldd-list>
+                    <div class="kv-adjust-panel__foot">
+                      <nldd-text id="adjust-info" size="sm" color="secondary"></nldd-text>
+                      <nldd-button id="btn-reset-adjust" variant="secondary" size="sm"
+                                   text="Alle bijstellingen wissen" hidden></nldd-button>
+                    </div>
+                  </nldd-container>
+                </nldd-box>
+              </nldd-container>
+            </nldd-card>
+
+            <nldd-card class="kv-sidebar">
+              <nldd-container padding="24" gap="24">
+                <nldd-title size="4"><h2>Filters &amp; opties</h2></nldd-title>
+
+                <div>
+                  <nldd-form-field label="Model" id="model-select-wrapper" hidden>
+                    <nldd-dropdown size="sm">
+                      <select id="model-select"></select>
+                    </nldd-dropdown>
+                  </nldd-form-field>
+                  <div id="model-static-wrapper" hidden>
+                    <nldd-text size="xs" color="secondary">Model</nldd-text>
+                    <nldd-text id="model-static" size="sm"></nldd-text>
+                  </div>
+                  <nldd-text id="model-description" size="xs" color="secondary"
+                             class="kv-field-help"></nldd-text>
+                </div>
+
+                <nldd-form-section text="Weergave">
+                  <nldd-switch-field id="toggle-next-month" label="Volgende maand tonen" checked></nldd-switch-field>
+                  <div class="kv-switch-row">
+                    <nldd-switch-field id="toggle-last-year" label="Realisatie vorig jaar"></nldd-switch-field>
+                    <nldd-icon-button id="last-year-info" icon="question-mark-circle" size="sm"
+                                      variant="neutral-transparent" popup-type="dialog"
+                                      accessible-label="Uitleg over de vergelijking met vorig jaar">
+                      <nldd-popover slot="popup" accessible-label="Uitleg vergelijking met vorig jaar"
+                                    role="region" width="320px">
+                        <nldd-container padding="16">
+                          <nldd-rich-text spacing="tight">
+                            <p>
+                              Vergelijkt met <strong>52 weken (364 dagen) eerder</strong>, niet met dezelfde
+                              kalenderdatum. Een jaar is 52 weken plus één dag, dus dezelfde datum valt vorig
+                              jaar op een andere weekdag — dan wordt een maandag tegen een zondag afgezet.
+                              Met deze correctie blijft de weekdag gelijk en bevat de vergelijkingsperiode
+                              evenveel werk- en weekenddagen.
+                            </p>
+                          </nldd-rich-text>
+                        </nldd-container>
+                      </nldd-popover>
+                    </nldd-icon-button>
+                  </div>
+                  <nldd-switch-field id="toggle-totals" label="Totale volumes &amp; %-verschil"></nldd-switch-field>
+                </nldd-form-section>
+
+                <div>
+                  <nldd-text size="sm" weight="bold" id="export-label">Exporteren</nldd-text>
+                  <nldd-text size="xs" color="secondary" class="kv-field-help">
+                    Bevat de hele prognoseperiode plus een kolom per scenario.
+                  </nldd-text>
+                  <nldd-container layout="row" gap="8" class="kv-export-buttons"
+                                  role="group" aria-labelledby="export-label">
+                    <nldd-button id="btn-export-csv" variant="secondary" size="sm" text="CSV"
+                                 start-icon="arrow-down-in-bucket"></nldd-button>
+                    <nldd-button id="btn-export-xlsx" variant="primary" size="sm" text="Excel"
+                                 start-icon="arrow-down-in-bucket"></nldd-button>
+                  </nldd-container>
+                  <nldd-text id="export-status" size="xs" color="secondary" class="kv-field-help"
+                             role="status" aria-live="polite"></nldd-text>
+                </div>
+
+                <div>
+                  <nldd-text id="graph-meta" size="xs" color="secondary"></nldd-text>
+                  <nldd-text id="graph-status" size="xs" color="secondary"
+                             role="status" aria-live="polite"></nldd-text>
+                </div>
+              </nldd-container>
+            </nldd-card>
+          </div>
+        </nldd-container>
+      </nldd-simple-section>
+
+      <!-- ══════════ Scherm 3: modelkaart ══════════ -->
+      <nldd-simple-section id="screen-model" width="1280px" aria-label="Modelkaart" hidden>
+        <nldd-container id="model-card" layout="stack" gap="24"></nldd-container>
+      </nldd-simple-section>
+    </main>
+
+  </nldd-page>
+
+  <footer class="kv-footer" role="contentinfo" aria-label="Bèta-melding">
+    <div class="kv-footer__inner">
+      <nldd-banner variant="warning" size="sm">
+        <nldd-text size="sm">
+          Dit is een bètaversie van dit hulpmiddel. Vragen of feedback?
+          <nldd-link href="mailto:innovatiemanagamentfinancien@minfin.nl"
+            >innovatiemanagamentfinancien@minfin.nl</nldd-link>
+        </nldd-text>
+      </nldd-banner>
+    </div>
+  </footer>
+</nldd-app-view>
+
+</body>
+</html>
