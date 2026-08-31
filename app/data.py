@@ -89,7 +89,8 @@ def parse_csv(raw: bytes) -> pd.DataFrame:
     if out.empty:
         raise ValueError("Geen geldige rijen (datum + cashflow) in het bestand.")
 
-    out = out.groupby(out["date"].dt.normalize(), as_index=False)["cashflow"].sum()
+    out["date"] = out["date"].dt.normalize()
+    out = out.groupby("date", as_index=False)["cashflow"].sum()
     out = out.sort_values("date").reset_index(drop=True)
     # Vul ontbrekende kalenderdagen met 0 zodat de reeks aaneengesloten is.
     full = pd.DataFrame({"date": pd.date_range(out["date"].min(), out["date"].max(), freq="D")})

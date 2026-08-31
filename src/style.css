@@ -221,19 +221,22 @@ nldd-top-navigation-bar,
 .kv-editor__quick nldd-button { flex: 1 1 0; min-inline-size: 0; }
 
 /* ── Bijstellingen ─────────────────────────────────────────
-   De lijst zelf is een nldd-list; alleen de kop en de voet zijn een eigen
-   flexregel, omdat een veld en twee knoppen op één onderlijn moeten staan. */
+   De lijst zelf is een nldd-list; alleen de kop en de voet krijgen een eigen
+   regel, omdat een veld en twee knoppen op één onderlijn moeten staan. */
+/* Een raster, geen flexregel: nldd-button-group is per ontwerp width: 100%, en
+   als flex-item zou die breedte de knoppen altijd naar een eigen regel duwen.
+   In een max-content-kolom telt die 100% niet mee voor de intrinsieke breedte,
+   dus krimpt de kolom netjes tot de twee knoppen zelf. Het naamveld is
+   begrensd: een scenarionaam is kort, en een veld dat doorgroeit tot de hele
+   paneelbreedte duwt de knoppen die erbij horen ver van het veld af. */
 .kv-adjust-panel__head {
-  display: flex;
-  align-items: flex-end;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(11rem, 20rem) max-content;
+  align-items: end;
   gap: var(--primitives-space-16);
 }
-/* Begrensd: een scenarionaam is kort, en een veld dat doorgroeit tot de hele
-   paneelbreedte duwt de knoppen die erbij horen ver van het veld af. */
 .kv-field--inline {
-  flex: 0 1 20rem;
-  min-inline-size: 11rem;
+  min-inline-size: 0;
 }
 
 .kv-adjust-panel__foot {
@@ -264,7 +267,8 @@ nldd-top-navigation-bar,
 .kv-adjust-values .kv-adjust-base { text-decoration: line-through; }
 
 @media (max-width: 640px) {
-  .kv-field--inline { flex: 1 1 100%; }
+  /* Te smal voor veld plus knoppen naast elkaar: dan onder elkaar. */
+  .kv-adjust-panel__head { grid-template-columns: minmax(0, 1fr); }
   .kv-adjust-values { grid-template-columns: auto 1.25rem auto; }
 }
 
