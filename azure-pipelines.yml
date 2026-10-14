@@ -8,7 +8,7 @@ pool:
 
 variables:
   - group: kasvisie_secrets
-  # Provides ALLOWED_IP_1 and ALLOWED_IP_2 (IPs/CIDRs for the ingress
+  # Provides ALLOWED_IP_1 to ALLOWED_IP_4 (IPs/CIDRs for the ingress
   # access-restriction rules), same convention as invulhulp.
   - name: IMAGE_NAME
     value: kasvisie
@@ -151,20 +151,45 @@ stages:
               RESOURCE_GROUP: $(RESOURCE_GROUP)
               ALLOWED_IP_1: $(ALLOWED_IP_1)
               ALLOWED_IP_2: $(ALLOWED_IP_2)
+              ALLOWED_IP_3: $(ALLOWED_IP_3)
+              ALLOWED_IP_4: $(ALLOWED_IP_4)
             inputs:
               azureSubscription: ccoe-ipf-d-inno-spn-cicd
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
+                set -euo pipefail
+                # Same IP ranges as the invulhulp frontend.
                 az containerapp ingress access-restriction set \
                   --name "$CONTAINER_APP" \
                   --resource-group "$RESOURCE_GROUP" \
-                  --rule-name "allowed-ip-1" \
+                  --rule-name "Allowed range 1" \
                   --ip-address "$ALLOWED_IP_1" \
                   --action Allow
                 az containerapp ingress access-restriction set \
                   --name "$CONTAINER_APP" \
                   --resource-group "$RESOURCE_GROUP" \
-                  --rule-name "allowed-ip-2" \
+                  --rule-name "Allowed range 2" \
                   --ip-address "$ALLOWED_IP_2" \
                   --action Allow
+                az containerapp ingress access-restriction set \
+                  --name "$CONTAINER_APP" \
+                  --resource-group "$RESOURCE_GROUP" \
+                  --rule-name "Allowed range 3" \
+                  --ip-address "$ALLOWED_IP_3" \
+                  --action Allow
+                az containerapp ingress access-restriction set \
+                  --name "$CONTAINER_APP" \
+                  --resource-group "$RESOURCE_GROUP" \
+                  --rule-name "Allowed range 4" \
+                  --ip-address "$ALLOWED_IP_4" \
+                  --action Allow
+
+                # Rules are keyed by name: drop the ones earlier deploys created
+                # under the old names, now covered by the rules above.
+                for rule in allowed-ip-1 allowed-ip-2; do
+                  az containerapp ingress access-restriction remove \
+                    --name "$CONTAINER_APP" \
+                    --resource-group "$RESOURCE_GROUP" \
+                    --rule-name "$rule" 2>/dev/null || true
+                done
