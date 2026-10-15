@@ -29,29 +29,6 @@
 }
 
 .kv-main { display: block; }
-/* Ruimte onder de laatste inhoud, zodat die niet blijvend onder de zwevende
-   bèta-melding verdwijnt — dat was destijds precies het bezwaar tegen een vaste
-   balk: hij lag over "Alle bijstellingen wissen" heen. */
-.kv-main { padding-block-end: var(--primitives-space-64); }
-
-/* ── Bèta-melding ──────────────────────────────────────────
-   Zweeft onderin beeld, zoals in de invulhulp: geen nldd-page-footer, want die
-   tekent een band over de volle breedte die dan permanent in beeld staat. */
-.kv-footer {
-  position: fixed;
-  inset-block-end: 0;
-  inset-inline: 0;
-  z-index: 100;
-  /* De balk zelf vangt niets; alleen de melding erin is aanklikbaar. */
-  pointer-events: none;
-}
-.kv-footer__inner {
-  pointer-events: auto;
-  max-inline-size: 1280px;
-  margin-inline: auto;
-  padding-block: var(--primitives-space-4);
-  padding-inline: var(--primitives-space-16);
-}
 
 /* ── Navigatiebalk ─────────────────────────────────────────
    Applicatienaam en hoofdnavigatie op één regel, onder de logobalk en op

@@ -14,6 +14,14 @@
   <nldd-page>
     <div slot="header">
       <nldd-skip-link href="main" text="Direct naar de inhoud">
+        <!-- Bètamelding: NLDD's statusbalk hoort helemaal bovenaan, boven het
+             lint, zoals in de invulhulp. Eén actie en geen links in de tekst,
+             dus de hele balk is de mailto-link. -->
+        <nldd-status-bar
+          variant="warning"
+          text="Dit is een bètaversie van dit hulpmiddel. Vragen of feedback? innovatiemanagamentfinancien@minfin.nl"
+          href="mailto:innovatiemanagamentfinancien@minfin.nl">
+        </nldd-status-bar>
         <nldd-top-navigation-bar
           logo-title="Ministerie van Financiën"
           logo-subtitle="Kasprognose"
@@ -263,18 +271,6 @@
     </main>
 
   </nldd-page>
-
-  <footer class="kv-footer" role="contentinfo" aria-label="Bèta-melding">
-    <div class="kv-footer__inner">
-      <nldd-banner variant="warning" size="sm">
-        <nldd-text size="sm">
-          Dit is een bètaversie van dit hulpmiddel. Vragen of feedback?
-          <nldd-link href="mailto:innovatiemanagamentfinancien@minfin.nl"
-            >innovatiemanagamentfinancien@minfin.nl</nldd-link>
-        </nldd-text>
-      </nldd-banner>
-    </div>
-  </footer>
 </nldd-app-view>
 
 </body>
