@@ -70,9 +70,12 @@ def parse_csv(raw: bytes) -> pd.DataFrame:
     """Accepteert een CSV met een datumkolom en een cashflow-kolom.
 
     De datum mag in een kolom 'date'/'datum' staan of in de (naamloze) eerste
-    kolom; het bedrag in 'cashflow'/'bedrag'/'amount'.
+    kolom; het bedrag in 'cashflow'/'bedrag'/'amount'. Ook een Nederlandse
+    Excel-export: puntkomma als scheidingsteken, BOM, dag-maand-jaar en
+    decimale komma.
     """
-    df = pd.read_csv(io.BytesIO(raw))
+    # sep=None laat pandas het scheidingsteken raden; utf-8-sig haalt de BOM weg.
+    df = pd.read_csv(io.BytesIO(raw), sep=None, engine="python", encoding="utf-8-sig")
     cols = {c.strip().lower(): c for c in df.columns}
 
     date_col = next((cols[k] for k in ("date", "datum") if k in cols), df.columns[0])
@@ -80,10 +83,16 @@ def parse_csv(raw: bytes) -> pd.DataFrame:
     if value_col is None:
         raise ValueError("Geen kolom 'cashflow' (of 'bedrag'/'amount') gevonden.")
 
+    # Eerst ISO (2024-01-31); wat niet lukt als dag-maand-jaar (31-1-2024).
+    # dayfirst niet op alles: dan leest pandas 2024-01-03 als 1 maart.
+    dates = pd.to_datetime(df[date_col], errors="coerce", format="ISO8601")
+    dates = dates.fillna(pd.to_datetime(df[date_col], errors="coerce", dayfirst=True))
     out = pd.DataFrame(
         {
-            "date": pd.to_datetime(df[date_col], errors="coerce"),
-            "cashflow": pd.to_numeric(df[value_col], errors="coerce"),
+            "date": dates,
+            "cashflow": pd.to_numeric(
+                df[value_col].astype(str).str.replace(",", ".", regex=False), errors="coerce"
+            ),
         }
     ).dropna()
     if out.empty:

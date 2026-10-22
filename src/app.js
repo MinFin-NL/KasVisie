@@ -172,7 +172,7 @@ import KVChart from "./chart.js";
 
     async reload() {
       try {
-        const data = await api("/api/data");
+        const data = await api("api/data");
         this.records = data.records;
         this.renderSummary(data);
         this.renderMonthSelect();
@@ -243,6 +243,7 @@ import KVChart from "./chart.js";
   $("#upload-file").addEventListener("change", (evt) => {
     const files = (evt.detail && evt.detail.files) || [];
     uploadFile = files.length ? files[0] : null;
+    $("#upload-alert").innerHTML = "";
   });
 
   $("#upload-form").addEventListener("submit", async (evt) => {
@@ -253,8 +254,31 @@ import KVChart from "./chart.js";
     }
     const fd = new FormData();
     fd.append("file", uploadFile);
+    $("#upload-alert").innerHTML = "";
+    const bar = $("#upload-progress");
+    Object.assign(bar, { value: 0, indeterminate: false, hidden: false });
     try {
-      const s = await api("/api/upload", { method: "POST", body: fd });
+      const s = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "api/upload");
+
+
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) bar.value = Math.round((e.loaded / e.total) * 100);
+        };
+        xhr.upload.onload = () => { bar.indeterminate = true; };
+        xhr.onload = () => {
+          // Zelf parsen i.p.v. responseType "json": de F5-portal op acc wikkelt
+          // XHR in, en een 200 zonder samenvatting is dan geen geslaagde upload.
+          let body = {};
+          try { body = JSON.parse(xhr.responseText); } catch { /* geen JSON */ }
+          if (xhr.status < 200 || xhr.status >= 300) reject(new Error(body.detail || `Fout ${xhr.status}`));
+          else if (!body.source) reject(new Error("Onverwacht antwoord van de server."));
+          else resolve(body);
+        };
+        xhr.onerror = () => reject(new Error("Upload mislukt: geen verbinding."));
+        xhr.send(fd);
+      });
       dataScreen.alert(`Geüpload: ${s.source} (${s.rows} dagen).`);
       dataScreen.records = null;
       graphScreen.invalidate();
@@ -263,11 +287,13 @@ import KVChart from "./chart.js";
       await dataScreen.reload();
     } catch (err) {
       dataScreen.alert(err.message, true);
+    } finally {
+      bar.hidden = true;
     }
   });
 
   $("#btn-demo").addEventListener("click", async () => {
-    const s = await api("/api/demo", { method: "POST" });
+    const s = await api("api/demo", { method: "POST" });
     dataScreen.alert(`Demo-data geladen (${s.rows} dagen).`);
     dataScreen.records = null;
     graphScreen.invalidate();
@@ -369,7 +395,7 @@ import KVChart from "./chart.js";
     async show() {
       if (!this.modelsLoaded) {
         this.skeleton(true);
-        const status = await api("/api/status");
+        const status = await api("api/status");
         this.models = status.models || [];
         this.modelKey = this.models.length ? this.models[0].key : "gbr";
 
@@ -420,16 +446,17 @@ import KVChart from "./chart.js";
 
     async forecast() {
       const model = this.modelKey;
-      if (!this.cache[model]) {
+      const cache = this.cache;
+      if (!cache[model]) {
         this.skeleton(true);
         $("#graph-status").textContent = "Prognose berekenen…";
         try {
-          this.cache[model] = await api(`/api/forecast?model=${model}`);
+          cache[model] = await api(`api/forecast?model=${model}`);
         } finally {
           $("#graph-status").textContent = "";
         }
       }
-      return this.cache[model];
+      return cache[model];
     },
 
     async render() {
@@ -747,7 +774,7 @@ import KVChart from "./chart.js";
           })
           .filter(Boolean);
 
-        const res = await fetch("/api/export", {
+        const res = await fetch("api/export", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ format: fmt, model: fc.model, scenarios }),
@@ -864,7 +891,7 @@ import KVChart from "./chart.js";
         `<nldd-activity-indicator size="24" timing="instant"
                                   text="Modelkaart laden" show-text></nldd-activity-indicator>`);
       try {
-        const modelcard = await api(`/api/modelcard?model=${key}`);
+        const modelcard = await api(`api/modelcard?model=${key}`);
         this.loadedFor = key;
         this.render(modelcard);
       } catch (err) {
